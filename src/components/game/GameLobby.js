@@ -1,7 +1,8 @@
 // src/components/GameLobby.js
 import React, { useState, useEffect } from 'react';
 import { GameService } from '../../services/game-service';
-import { Plus, Users, Clock, Star, LogOut } from 'lucide-react';
+import { gameConfig } from '../../config/game-config';
+import { Plus, Users, Clock, LogOut, Settings, Map as MapIcon } from 'lucide-react';
 
 const gameService = new GameService();
 
@@ -10,6 +11,8 @@ export function GameLobby({ user, onJoinGame, onSignOut }) {
   const [gameCode, setGameCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [boardType, setBoardType] = useState('classic');
+  const [gameMode, setGameMode] = useState('classic');
 
   useEffect(() => {
     loadUserGames();
@@ -24,20 +27,23 @@ export function GameLobby({ user, onJoinGame, onSignOut }) {
     }
   };
 
-  const createNewGame = async () => {
-    setLoading(true);
-    setError('');
-
-    try {
-      const game = await gameService.createGame(user);
-      setGames(prev => [game, ...prev]);
-      onJoinGame(game);
-    } catch (error) {
-      setError(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const createNewGame = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const settings = {
+                boardId: boardType,
+                ...gameConfig.gameModes[gameMode]
+            };
+            const game = await gameService.createGame(user, settings);
+            setGames(prev => [game, ...prev]);
+            onJoinGame(game);
+        } catch (error) {
+            setError(error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
 
   const joinGameByCode = async (e) => {
     e.preventDefault();
@@ -85,51 +91,48 @@ export function GameLobby({ user, onJoinGame, onSignOut }) {
     return 'text-gray-400';
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-indigo-900 to-purple-900 p-4">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
-              Dice Dash
-            </h1>
-            <p className="text-gray-300 mt-2">Welcome, {user.displayName}!</p>
-          </div>
-          <button
-            onClick={onSignOut}
-            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            Sign Out
-          </button>
-        </div>
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-900 via-indigo-900 to-purple-900 p-4">
+            <div className="max-w-4xl mx-auto">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-8">
+                    <div>
+                        <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">Dice Dash</h1>
+                        <p className="text-gray-300 mt-2">Welcome, {user.displayName}!</p>
+                    </div>
+                    <button onClick={onSignOut} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors">
+                        <LogOut className="w-4 h-4" /> Sign Out
+                    </button>
+                </div>
 
-        {error && (
-          <div className="bg-red-500/20 border border-red-500 text-red-100 px-4 py-3 rounded-lg mb-6">
-            {error}
-          </div>
-        )}
+                {error && <div className="bg-red-500/20 border border-red-500 text-red-100 px-4 py-3 rounded-lg mb-6">{error}</div>}
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* Create Game */}
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-            <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <Plus className="w-5 h-5" />
-              Create New Game
-            </h2>
-            <p className="text-gray-300 mb-4">
-              Start a new Dice Dash game and invite friends to join!
-            </p>
-            <button
-              onClick={createNewGame}
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 rounded-lg font-semibold hover:from-green-600 hover:to-emerald-600 transition-all disabled:opacity-50"
-            >
-              {loading ? 'Creating...' : 'Create Game'}
-            </button>
-          </div>
+                {/* Quick Actions */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    {/* Create Game */}
+                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+                        <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Plus className="w-5 h-5" /> Create New Game</h2>
+
+                        {/* NEW: Game Creation Settings */}
+                        <div className="space-y-4 mb-6">
+                            <div>
+                                <label className="text-sm font-semibold text-gray-300 flex items-center gap-2 mb-2"><MapIcon className="w-4 h-4" />Board Type</label>
+                                <select value={boardType} onChange={(e) => setBoardType(e.target.value)} className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none">
+                                    {Object.values(gameConfig.boards).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-sm font-semibold text-gray-300 flex items-center gap-2 mb-2"><Settings className="w-4 h-4" />Game Mode</label>
+                                <select value={gameMode} onChange={(e) => setGameMode(e.target.value)} className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none">
+                                    {Object.entries(gameConfig.gameModes).map(([id, mode]) => <option key={id} value={id}>{id.charAt(0).toUpperCase() + id.slice(1)} ({mode.maxPlayers} players)</option>)}
+                                </select>
+                            </div>
+                        </div>
+
+                        <button onClick={createNewGame} disabled={loading} className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 rounded-lg font-semibold hover:from-green-600 hover:to-emerald-600 transition-all disabled:opacity-50">
+                            {loading ? 'Creating...' : 'Create Game'}
+                        </button>
+                    </div>
 
           {/* Join Game */}
           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">

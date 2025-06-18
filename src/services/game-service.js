@@ -15,52 +15,58 @@ import {
   getDoc,
   serverTimestamp
 } from 'firebase/firestore';
+import { gameConfig } from '../config/game-config';
+import { PLAYER_COLORS } from '../utils/constants';
 
 export class GameService {
-  // Create a new game
-  async createGame(hostUser, gameSettings = {}) {
-    try {
-      const now = new Date();
-      const gameData = {
-        hostId: hostUser.uid,
-        hostName: hostUser.displayName || 'Host',
-        players: [
-          {
-            userId: hostUser.uid,
-            name: hostUser.displayName || 'Host',
-            position: 0,
-            coins: 20,
-            stars: 0,
-            energy: 5,
-            maxEnergy: 5,
-            color: 'bg-blue-500',
-            isOnline: true,
-            joinedAt: now,
-            lastActivity: now
-          }
-        ],
-        status: 'waiting', // waiting, active, completed
-        currentTurn: 0,
-        boardId: gameSettings.boardId || 'default',
-        maxPlayers: gameSettings.maxPlayers || 4,
-        energyRegenRate: 3600, // seconds per energy
-        gameCode: this.generateGameCode(),
-        createdAt: serverTimestamp(),
-        lastActivity: serverTimestamp(),
-        winner: null
-      };
+    // MODIFIED: createGame now accepts settings
+    async createGame(hostUser, gameSettings = {}) {
+        try {
+            const now = new Date();
+            // Use provided settings or fall back to defaults from config
+            const board = gameConfig.boards[gameSettings.boardId] || gameConfig.boards.classic;
+            const mode = gameConfig.gameModes[gameSettings.mode] || gameConfig.gameModes.classic;
 
-      const docRef = await addDoc(collection(db, 'games'), gameData);
-      return { id: docRef.id, ...gameData };
-    } catch (error) {
-      throw new Error(`Failed to create game: ${error.message}`);
+            const gameData = {
+                hostId: hostUser.uid,
+                hostName: hostUser.displayName || 'Host',
+                players: [{
+                    userId: hostUser.uid,
+                    name: hostUser.displayName || 'Host',
+                    position: 0,
+                    coins: 20,
+                    stars: 0,
+                    energy: 5,
+                    maxEnergy: 5,
+                    color: PLAYER_COLORS[0],
+                    isOnline: true,
+                    joinedAt: now,
+                    lastActivity: now,
+                    lastEnergyUpdate: now
+                }],
+                status: 'waiting',
+                boardId: board.id, // Use the selected board ID
+                maxPlayers: gameSettings.maxPlayers || mode.maxPlayers,
+                energyRegenRate: gameSettings.energyRegenRate || mode.energyRegenRate,
+                starGoal: gameSettings.starGoal || mode.starGoal,
+                gameCode: this.generateGameCode(),
+                createdAt: serverTimestamp(),
+                lastActivity: serverTimestamp(),
+                winner: null,
+            };
+
+            const docRef = await addDoc(collection(db, 'games'), gameData);
+            return { id: docRef.id, ...gameData };
+        } catch (error) {
+            throw new Error(`Failed to create game: ${error.message}`);
+        }
     }
-  }
 
   // Join game by code
   async joinGameByCode(gameCode, user) {
     try {
       // Find game with this code
+
       const gamesRef = collection(db, 'games');
       const q = query(
         gamesRef, 
@@ -88,7 +94,7 @@ export class GameService {
 
       const playerColors = ['bg-blue-500', 'bg-red-500', 'bg-green-500', 'bg-purple-500'];
       const usedColors = gameData.players.map(p => p.color);
-      const availableColor = playerColors.find(color => !usedColors.includes(color));
+      const availableColor = PLAYER_COLORS.find(color => !usedColors.includes(color)) || PLAYER_COLORS[gameData.players.length % PLAYER_COLORS.length];
 
       const now = new Date();
       const newPlayer = {
