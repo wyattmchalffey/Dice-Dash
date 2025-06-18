@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { AuthScreen } from './components/auth/AuthScreen';
 import { GameLobby } from './components/game/GameLobby';
 import { GameBoard } from './components/game/GameBoard';
+import { AdminPanel } from './components/admin/AdminPanel';
 import { AuthService } from './services/auth-service';
 import './App.css';
 

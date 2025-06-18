@@ -554,28 +554,31 @@ function AsyncMMOBoardGame({ game, user, onLeaveGame, gameService }) {
               
               {/* Board Spaces */}
               {boardSpaces.map((space) => {
-                const leftPercent = (space.x / 16) * 100;
-                const topPercent = (space.y / 14) * 100;
-                
-                return (
-                  <div
-                    key={space.id}
-                    className={`absolute w-10 h-10 rounded-full ${getSpaceColor(space.type)} border-2 border-white flex items-center justify-center cursor-pointer hover:scale-110 transition-transform shadow-lg z-20`}
-                    style={{
-                      left: `${leftPercent}%`,
-                      top: `${topPercent}%`,
-                      transform: 'translate(-50%, -50%)'
-                    }}
-                    onClick={() => setSelectedSpace(space)}
-                    title={`${space.name} (${space.id}) - ${space.x},${space.y}`}
-                  >
-                    {getSpaceIcon(space.type)}
-                    <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-xs font-bold text-white bg-black/80 px-1 rounded">
-                      {space.id}
-                    </span>
-                  </div>
-                );
-              })}
+                              const leftPercent = (space.x / 16) * 100;
+                              const topPercent = (space.y / 14) * 100;
+
+                              return (
+                                  <div
+                                      key={space.id}
+                                      className={`absolute w-12 h-12 rounded-full ${getSpaceColor(space.type)} border-2 border-white flex items-center justify-center cursor-pointer hover:scale-110 transition-transform shadow-lg`}
+                                      style={{
+                                          left: `${leftPercent}%`,
+                                          top: `${topPercent}%`,
+                                          transform: 'translate(-50%, -50%)',
+                                          zIndex: 20
+                                      }}
+                                      onClick={() => setSelectedSpace(space)}
+                                      title={`${space.name} (${space.id})`}
+                                  >
+                                      <div className="flex flex-col items-center">
+                                          {getSpaceIcon(space.type)}
+                                          <span className="text-xs font-bold text-white mt-1">
+                                              {space.id}
+                                          </span>
+                                      </div>
+                                  </div>
+                              );
+                          })}
               
               {/* Connection Lines */}
               <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
