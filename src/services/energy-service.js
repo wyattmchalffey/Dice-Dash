@@ -1,5 +1,5 @@
 // src/services/energy-service.js
-import { db } from '../firebase-config';
+import { db } from '../config/firebase-config';
 import { doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 
 export class EnergyService {

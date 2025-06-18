@@ -551,34 +551,44 @@ function AsyncMMOBoardGame({ game, user, onLeaveGame, gameService }) {
               <div className="absolute bottom-4 right-4 w-8 h-8 bg-purple-500 rounded-full border-2 border-white flex items-center justify-center text-xs text-white">
                 T4
               </div>
-              
-              {/* Board Spaces */}
-              {boardSpaces.map((space) => {
-                              const leftPercent = (space.x / 16) * 100;
-                              const topPercent = (space.y / 14) * 100;
 
-                              return (
-                                  <div
-                                      key={space.id}
-                                      className={`absolute w-12 h-12 rounded-full ${getSpaceColor(space.type)} border-2 border-white flex items-center justify-center cursor-pointer hover:scale-110 transition-transform shadow-lg`}
-                                      style={{
-                                          left: `${leftPercent}%`,
-                                          top: `${topPercent}%`,
-                                          transform: 'translate(-50%, -50%)',
-                                          zIndex: 20
-                                      }}
-                                      onClick={() => setSelectedSpace(space)}
-                                      title={`${space.name} (${space.id})`}
-                                  >
-                                      <div className="flex flex-col items-center">
-                                          {getSpaceIcon(space.type)}
-                                          <span className="text-xs font-bold text-white mt-1">
-                                              {space.id}
-                                          </span>
-                                      </div>
-                                  </div>
-                              );
-                          })}
+                          {/* Board Spaces */}
+                {boardSpaces.map((space) => {
+                  const leftPercent = (space.x / 16) * 100;
+                  const topPercent = (space.y / 13) * 100;
+                  
+                  return (
+                    <div
+                      key={space.id}
+                      className={`absolute rounded-full border-4 border-white shadow-2xl flex items-center justify-center cursor-pointer hover:scale-125 transition-all duration-300 ${
+                        space.type === 'start' ? 'w-16 h-16' : 'w-14 h-14'
+                      }`}
+                      style={{
+                        left: `${leftPercent}%`,
+                        top: `${topPercent}%`,
+                        transform: 'translate(-50%, -50%)',
+                        zIndex: 20,
+                        background: `linear-gradient(135deg, ${getSpaceGradient(space.type)})`,
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.3)'
+                      }}
+                      onClick={() => setSelectedSpace(space)}
+                      title={`${space.name} (${space.id})`}
+                    >
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="transform scale-125">
+                          {getSpaceIcon(space.type)}
+                        </div>
+                        {space.type === 'start' && (
+                          <span className="text-xs font-bold text-white mt-1">START</span>
+                        )}
+                      </div>
+                      {/* Space number badge */}
+                      <div className="absolute -bottom-2 -right-2 w-6 h-6 bg-black/80 rounded-full flex items-center justify-center text-xs font-bold text-white border border-white">
+                        {space.id}
+                      </div>
+                    </div>
+                  );
+                })}
               
               {/* Connection Lines */}
               <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">

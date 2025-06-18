@@ -1,7 +1,7 @@
 // src/components/MassiveBoard.js
 import React, { useState, useEffect, useRef } from 'react';
-import { BoardGenerator } from '../utils/board-generator';
-import { EnergyService } from '../services/energy-service';
+import { BoardGenerator } from '../../utils/board-generator';
+import { EnergyService } from '../../services/energy-service';
 import { 
   Star, Coins, Zap, MapPin, Castle, Gem, Map, Plus, Minus,
   Navigation, Users, Eye, EyeOff, Compass, Timer
