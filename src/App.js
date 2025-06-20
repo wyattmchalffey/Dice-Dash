@@ -148,15 +148,47 @@ function App() {
 
     // Initialize app
     useEffect(() => {
+        console.log("Setting up global listeners and auth subscription...");
+        const handleNotification = (event) => {
+            const { message, type } = event.detail;
+
+            // Simple notification display (you can make this fancier)
+            console.log(`Notification (${type}): ${message}`);
+
+            // You could also show a toast notification here
+        };
+        window.addEventListener('showNotification', handleNotification);
+
+        const handleShowEnergyPanel = () => {
+            setShowEnergyPanel(true);
+        };
+
         const unsubscribe = authService.onAuthStateChanged((user) => {
             setUser(user);
             setLoading(false);
-            
+
             if (user) {
+                // User is logged IN
                 initializePlayerSystems(user);
+
+                // Add user-specific listeners
+                window.addEventListener('showEnergyPanel', handleShowEnergyPanel);
+
+            } else {
+                window.removeEventListener('showEnergyPanel', handleShowEnergyPanel);
             }
         });
-        return () => unsubscribe();
+
+        // --- MAIN CLEANUP FUNCTION ---
+        // This runs only when the component unmounts.
+        return () => {
+            console.log("Cleaning up all listeners and auth subscription.");
+
+            // Cleanup all subscriptions and listeners
+            unsubscribe(); // Stops listening to auth changes
+            window.removeEventListener('showNotification', handleNotification);
+            window.removeEventListener('showEnergyPanel', handleShowEnergyPanel); // Important for cleanup on unmount
+        };
     }, []);
 
     // Initialize player-specific systems
