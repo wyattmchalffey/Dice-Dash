@@ -6,6 +6,7 @@ import { GameService } from '../../services/game-service';
 import { Users, Clock, Star, Coins, Zap, ArrowLeft, Copy, Play, Battery, Trophy } from 'lucide-react';
 import EnhancedGameBoard from './EnhancedGameBoard';
 import { BoardManager, EnhancedBoardGenerator, BOARD_THEMES } from '../../systems/board-system';
+import BoardDebugPanel from '../debug/BoardDebugPanel';
 
 const gameService = new GameService();
 
@@ -573,17 +574,27 @@ export function GameBoard({
                     </div>
 
                     {/* Game Board or Simple Board Display */}
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 overflow-hidden">
+                    <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 overflow-hidden" style={{ height: '600px' }}>
                         {board && boardManager ? (
-                            <EnhancedGameBoard
-                                game={game}
-                                board={board}
-                                boardManager={boardManager}
-                                currentPlayer={currentPlayer}
-                                onSpaceClick={(spaceId) => console.log('Space clicked:', spaceId)}
-                                onPlayerMove={handlePlayerMove}
-                                onDiceRoll={handleDiceRoll}
-                            />
+                            <>
+                                <EnhancedGameBoard
+                                    game={game}
+                                    board={board}
+                                    boardManager={boardManager}
+                                    currentPlayer={currentPlayer}
+                                    onSpaceClick={(spaceId) => console.log('Space clicked:', spaceId)}
+                                    onPlayerMove={handlePlayerMove}
+                                    onDiceRoll={handleDiceRoll}
+                                />
+                                
+                                {/* Debug Panel - Remove this in production 
+                                <BoardDebugPanel 
+                                    board={board}
+                                    boardManager={boardManager}
+                                    game={game}
+                                    currentPlayer={currentPlayer}
+                                />*/}
+                            </>
                         ) : (
                             // Simple fallback board display
                             <div className="p-8">

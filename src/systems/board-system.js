@@ -171,150 +171,46 @@ export class EnhancedBoardGenerator {
 
     // Generate a massive board that supports 200+ players
     generateMassiveBoard(width = 100, height = 100, playerCount = 200) {
+        console.log('Starting board generation with dimensions:', width, 'x', height);
+
         const spaces = [];
-        const totalSpaces = Math.floor(width * height * 0.3); // 30% density
-        const spacesPerPlayer = Math.ceil(totalSpaces / playerCount);
+        const spawnZones = [];
 
-        // Create spawn zones for players
-        const spawnZones = this.createSpawnZones(width, height, playerCount);
-
-        // Generate main paths connecting spawn zones
-        const mainPaths = this.generateMainPaths(width, height, spawnZones);
-
-        // Place spaces along paths
+        // For now, let's create a simple grid of spaces to test
+        // We'll make it smaller for initial testing (10x10 = 100 spaces)
+        const actualWidth = Math.min(width, 10);
+        const actualHeight = Math.min(height, 10);
         let idCounter = 0;
-        mainPaths.forEach(path => {
-            path.forEach((coord, index) => {
-                if (index % 2 === 0) { // Place space every other coordinate
-                    const space = this.createSpace(idCounter++, coord.x, coord.y);
+
+        // Create a grid of spaces
+        for (let y = 0; y < actualHeight; y++) {
+            for (let x = 0; x < actualWidth; x++) {
+                // Create spaces in a checkerboard pattern to ensure connectivity
+                if ((x + y) % 2 === 0 || Math.random() < 0.7) {
+                    const space = this.createSpace(idCounter++, x, y);
                     spaces.push(space);
                 }
-            });
-        });
-
-        // Add branching paths
-        const branches = this.generateBranchingPaths(spaces, width, height);
-        branches.forEach(coord => {
-            const space = this.createSpace(idCounter++, coord.x, coord.y);
-            spaces.push(space);
-        });
+            }
+        }
 
         // Connect adjacent spaces
         this.connectSpaces(spaces);
 
-        // Add special features
-        this.addStarSpaces(spaces, playerCount);
-        this.addWarpPairs(spaces);
-        this.addShortcuts(spaces);
+        // Create spawn zones (4 corners for now)
+        spawnZones.push({ x: 0, y: 0 });
+        spawnZones.push({ x: actualWidth - 1, y: 0 });
+        spawnZones.push({ x: 0, y: actualHeight - 1 });
+        spawnZones.push({ x: actualWidth - 1, y: actualHeight - 1 });
 
-        // Apply theme modifiers
-        this.applyThemeModifiers(spaces);
+        console.log('Board generated with', spaces.length, 'spaces');
 
         return {
             spaces,
-            width,
-            height,
-            theme: this.theme,
-            playerCapacity: playerCount,
-            spawnZones
+            width: actualWidth,
+            height: actualHeight,
+            spawnZones,
+            theme: this.theme
         };
-    }
-
-    createSpawnZones(width, height, playerCount) {
-        const zones = [];
-        const zonesNeeded = Math.ceil(playerCount / 25); // 25 players per zone
-        const cols = Math.ceil(Math.sqrt(zonesNeeded));
-        const rows = Math.ceil(zonesNeeded / cols);
-
-        for (let r = 0; r < rows; r++) {
-            for (let c = 0; c < cols; c++) {
-                if (zones.length < zonesNeeded) {
-                    zones.push({
-                        x: Math.floor((c + 0.5) * (width / cols)),
-                        y: Math.floor((r + 0.5) * (height / rows)),
-                        id: zones.length
-                    });
-                }
-            }
-        }
-
-        return zones;
-    }
-
-    generateMainPaths(width, height, spawnZones) {
-        const paths = [];
-
-        // Connect spawn zones in a web pattern
-        for (let i = 0; i < spawnZones.length; i++) {
-            for (let j = i + 1; j < spawnZones.length; j++) {
-                if (Math.random() < 0.6) { // 60% chance to connect
-                    const path = this.createPath(
-                        spawnZones[i].x, spawnZones[i].y,
-                        spawnZones[j].x, spawnZones[j].y,
-                        width, height
-                    );
-                    paths.push(path);
-                }
-            }
-        }
-
-        return paths;
-    }
-
-    createPath(x1, y1, x2, y2, maxWidth, maxHeight) {
-        const path = [];
-        const steps = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1));
-
-        for (let i = 0; i <= steps; i++) {
-            const t = i / steps;
-            const x = Math.round(x1 + (x2 - x1) * t);
-            const y = Math.round(y1 + (y2 - y1) * t);
-
-            // Add some randomness to make paths more interesting
-            const offsetX = Math.floor(Math.random() * 5 - 2);
-            const offsetY = Math.floor(Math.random() * 5 - 2);
-
-            const finalX = Math.max(0, Math.min(maxWidth - 1, x + offsetX));
-            const finalY = Math.max(0, Math.min(maxHeight - 1, y + offsetY));
-
-            path.push({ x: finalX, y: finalY });
-        }
-
-        return path;
-    }
-
-    generateBranchingPaths(existingSpaces, width, height) {
-        const branches = [];
-        const grid = this.createGrid(width, height, existingSpaces);
-
-        existingSpaces.forEach(space => {
-            if (Math.random() < 0.3) { // 30% chance to branch
-                const branchLength = Math.floor(Math.random() * 10) + 5;
-                const angle = Math.random() * Math.PI * 2;
-
-                for (let i = 1; i <= branchLength; i++) {
-                    const x = Math.round(space.x + Math.cos(angle) * i);
-                    const y = Math.round(space.y + Math.sin(angle) * i);
-
-                    if (x >= 0 && x < width && y >= 0 && y < height && grid[y] && grid[y][x] !== undefined && !grid[y][x]) {
-                        branches.push({ x, y });
-                        grid[y][x] = true;
-                    }
-                }
-            }
-        });
-
-        return branches;
-    }
-
-    createGrid(width, height, spaces) {
-        const grid = Array(height).fill(null).map(() => Array(width).fill(false));
-        spaces.forEach(space => {
-            if (space.y >= 0 && space.y < height && space.x >= 0 && space.x < width) {
-                grid[space.y][space.x] = true;
-            }
-        });
-        return grid;
     }
 
     createSpace(id, x, y) {
@@ -326,16 +222,16 @@ export class EnhancedBoardGenerator {
             type: spaceType.id,
             name: `${spaceType.name} ${id}`,
             connections: [],
-            players: [], // Track multiple players on same space
-            items: [], // Items that can be picked up
-            effects: [] // Active effects on this space
+            players: [],
+            items: [],
+            effects: []
         };
     }
 
     selectSpaceType() {
         const modifiedWeights = this.spaceTypes.map(type => ({
             ...type,
-            weight: type.weight * (this.theme.spaceModifiers[type.id] || 1)
+            weight: type.weight * (this.theme.spaceModifiers[type.id.toLowerCase()] || 1)
         }));
 
         const totalWeight = modifiedWeights.reduce((sum, type) => sum + type.weight, 0);
@@ -348,110 +244,55 @@ export class EnhancedBoardGenerator {
             }
         }
 
-        return modifiedWeights[0];
+        return this.spaceTypes[0]; // Default to first type
     }
 
     connectSpaces(spaces) {
-        const maxDistance = 3;
-
+        // Create a map for quick lookup
+        const spaceMap = new Map();
         spaces.forEach(space => {
-            const nearbySpaces = spaces.filter(other => {
-                if (other.id === space.id) return false;
-                const distance = Math.sqrt(
-                    Math.pow(other.x - space.x, 2) +
-                    Math.pow(other.y - space.y, 2)
-                );
-                return distance <= maxDistance;
-            });
+            const key = `${space.x},${space.y}`;
+            spaceMap.set(key, space);
+        });
 
-            // Connect to 2-4 nearby spaces
-            const connectionCount = Math.min(nearbySpaces.length, 2 + Math.floor(Math.random() * 3));
-            nearbySpaces.sort((a, b) => {
-                const distA = Math.sqrt(Math.pow(a.x - space.x, 2) + Math.pow(a.y - space.y, 2));
-                const distB = Math.sqrt(Math.pow(b.x - space.x, 2) + Math.pow(b.y - space.y, 2));
-                return distA - distB;
-            });
+        // Connect each space to its neighbors
+        spaces.forEach(space => {
+            const neighbors = [
+                { x: space.x - 1, y: space.y },     // left
+                { x: space.x + 1, y: space.y },     // right
+                { x: space.x, y: space.y - 1 },     // up
+                { x: space.x, y: space.y + 1 },     // down
+            ];
 
-            for (let i = 0; i < connectionCount; i++) {
-                const other = nearbySpaces[i];
-                if (!space.connections.includes(other.id)) {
-                    space.connections.push(other.id);
+            neighbors.forEach(neighbor => {
+                const key = `${neighbor.x},${neighbor.y}`;
+                const neighborSpace = spaceMap.get(key);
+
+                if (neighborSpace && !space.connections.includes(neighborSpace.id)) {
+                    space.connections.push(neighborSpace.id);
                 }
-                if (!other.connections.includes(space.id)) {
-                    other.connections.push(space.id);
-                }
-            }
+            });
         });
     }
 
-    addStarSpaces(spaces, playerCount) {
-        const starCount = Math.ceil(playerCount / 20); // 1 star per 20 players
-        const candidates = spaces.filter(s => s.type !== 'star');
+    // Stub methods for full implementation later
+    createSpawnZones(width, height, playerCount) {
+        const zones = [];
+        const gridSize = Math.ceil(Math.sqrt(playerCount));
 
-        for (let i = 0; i < starCount && candidates.length > 0; i++) {
-            const index = Math.floor(Math.random() * candidates.length);
-            const space = candidates.splice(index, 1)[0];
-            space.type = 'star';
-            space.name = `Star Space ${space.id}`;
-        }
-    }
-
-    addWarpPairs(spaces) {
-        const warpSpaces = spaces.filter(s => s.type === 'warp');
-
-        // Ensure warp spaces come in pairs
-        for (let i = 0; i < warpSpaces.length - 1; i += 2) {
-            const warp1 = warpSpaces[i];
-            const warp2 = warpSpaces[i + 1];
-
-            if (warp1 && warp2) {
-                warp1.warpPartner = warp2.id;
-                warp2.warpPartner = warp1.id;
-            }
-        }
-    }
-
-    addShortcuts(spaces) {
-        const shortcutCount = Math.floor(spaces.length / 50);
-
-        for (let i = 0; i < shortcutCount; i++) {
-            const space1 = spaces[Math.floor(Math.random() * spaces.length)];
-            const space2 = spaces[Math.floor(Math.random() * spaces.length)];
-
-            const distance = Math.sqrt(
-                Math.pow(space2.x - space1.x, 2) +
-                Math.pow(space2.y - space1.y, 2)
-            );
-
-            // Only create shortcuts for spaces that are far apart
-            if (distance > 20 && !space1.connections.includes(space2.id)) {
-                space1.connections.push(space2.id);
-                space2.connections.push(space1.id);
-                space1.isShortcut = true;
-                space2.isShortcut = true;
-            }
-        }
-    }
-
-    applyThemeModifiers(spaces) {
-        // Add theme-specific features
-        if (this.theme.id === 'underwater') {
-            // Add bubble streams that act as one-way paths
-            spaces.forEach(space => {
-                if (Math.random() < 0.1 && space.connections && space.connections.length > 0) {
-                    space.bubbleStream = true;
-                    space.streamDirection = Math.floor(Math.random() * space.connections.length);
-                }
-            });
-        } else if (this.theme.id === 'space') {
-            // Add gravity wells that pull players
-            spaces.forEach(space => {
-                if (Math.random() < 0.05) {
-                    space.gravityWell = true;
-                    space.pullStrength = Math.floor(Math.random() * 3) + 1;
-                }
+        for (let i = 0; i < Math.min(playerCount, 4); i++) {
+            zones.push({
+                x: (i % 2) * (width - 1),
+                y: Math.floor(i / 2) * (height - 1)
             });
         }
+
+        return zones;
+    }
+
+    generateMainPaths(width, height, spawnZones) {
+        // Simple implementation - just return spawn zones as paths for now
+        return spawnZones.map(zone => [zone]);
     }
 }
 
