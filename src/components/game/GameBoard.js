@@ -587,13 +587,13 @@ export function GameBoard({
                                     onDiceRoll={handleDiceRoll}
                                 />
                                 
-                                {/* Debug Panel - Remove this in production 
+                                {/* Debug Panel - Remove this in production */}
                                 <BoardDebugPanel 
                                     board={board}
                                     boardManager={boardManager}
                                     game={game}
                                     currentPlayer={currentPlayer}
-                                />*/}
+                                />
                             </>
                         ) : (
                             // Simple fallback board display
