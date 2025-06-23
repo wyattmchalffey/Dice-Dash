@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { GameService } from '../../services/game-service';
 import { gameConfig } from '../../config/game-config';
-import { BOARD_THEMES } from '../../systems/enhanced-board-system';
+import { BOARD_THEMES } from '../../systems/board-system';
 import { Plus, Users, Clock, LogOut, Settings, Map as MapIcon, Battery, Star, Crown } from 'lucide-react';
 
 const gameService = new GameService();
@@ -137,7 +137,7 @@ export function GameLobby({ user, onJoinGame, onSignOut, energySystem, boardSyst
             <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent mb-2">
               Game Lobby
             </h1>
-            <p className="text-gray-300">Choose your adventure in MMO Party Quest</p>
+            <p className="text-gray-300">Choose your adventure in Dice Dash</p>
           </div>
 
           <div className="flex items-center gap-4">
