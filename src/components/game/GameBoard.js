@@ -49,10 +49,75 @@ export function GameBoard({
 
     // Initialize standard party game
     useEffect(() => {
-        if (game && user) {
-            initializeGame();
+        if (!game?.id || !boardManager || board) return; // Don't reinitialize if board exists
+
+        try {
+            // Determine theme from game data with multiple fallbacks
+            let theme = game.theme || game.boardId || game.boardType || 'classic_plains';
+
+            // Handle Firebase data where theme might be stored differently
+            if (game.settings?.boardId) {
+                theme = game.settings.boardId;
+            }
+
+            const playerCount = game.players?.length || 4;
+
+            console.log(`Initializing board for game ${game.id} with theme ${theme}`);
+
+            // Create board
+            boardManager.createBoard(game.id, theme, playerCount);
+            const createdBoard = boardManager.getBoard(game.id);
+
+            if (!createdBoard) {
+                throw new Error('Failed to create board');
+            }
+
+            setBoard(createdBoard);
+
+            // Add players to board manager only if they exist and have valid data
+            if (game.players && Array.isArray(game.players)) {
+                game.players.forEach((player, index) => {
+                    if (player && player.userId) {
+                        try {
+                            boardManager.addPlayer(game.id, {
+                                userId: player.userId,
+                                displayName: player.name || player.displayName || `Player ${index + 1}`,
+                                coins: player.coins || 10,
+                                stars: player.stars || 0,
+                                position: player.position || 0
+                            });
+                        } catch (err) {
+                            console.warn(`Failed to add player ${player.userId}:`, err);
+                        }
+                    }
+                });
+            }
+
+            // Set game instance
+            const instance = boardManager.getGameInstance(game.id);
+            if (instance) {
+                setGameInstance(instance);
+
+                // Start game if status is active and we have enough players
+                if (game.status === 'active' && instance.players.size >= 2) {
+                    try {
+                        boardManager.startGame(game.id);
+                    } catch (err) {
+                        console.warn('Failed to start game:', err);
+                    }
+                }
+            }
+
+            // Get initial stats
+            const stats = boardManager.getGameStats(game.id);
+            setGameStats(stats);
+
+            console.log(`Party game initialized with ${createdBoard.spaces.length} spaces`);
+        } catch (error) {
+            console.error('Failed to initialize board:', error);
+            setError(`Failed to initialize game board: ${error.message}`);
         }
-    }, [game, user]);
+    }, [game?.id, boardManager, board]); // Only depend on game.id to avoid re-runs
 
     // Update game stats periodically
     useEffect(() => {
@@ -296,15 +361,29 @@ export function GameBoard({
 
     // Get player stats for UI
     const getPlayerStats = (userId) => {
-        if (!gameInstance) return null;
-        
+        if (!gameInstance || !boardManager) return null;
+
         const player = gameInstance.players.get(userId);
         if (!player) return null;
-        
+
+        // Safely get player position
+        let position = 0;
+        try {
+            if (boardManager.playerPositions && boardManager.playerPositions instanceof Map) {
+                position = boardManager.playerPositions.get(userId) || 0;
+            } else if (typeof boardManager.getPlayerPosition === 'function') {
+                position = boardManager.getPlayerPosition(userId) || 0;
+            }
+        } catch (err) {
+            console.warn('Failed to get player position:', err);
+            position = player.position || 0;
+        }
+
         return {
             coins: player.coins || 0,
             stars: player.stars || 0,
-            position: boardManager.getPlayerPosition(userId)
+            position: position,
+            items: player.items || []
         };
     };
 
@@ -313,60 +392,80 @@ export function GameBoard({
     const isUserTurn = currentPlayer?.userId === user?.uid;
 
     useEffect(() => {
-        if (!initialGame?.id) return;
+        if (!game?.id || !boardManager || board) return;
 
-        // Subscribe to real-time game updates
-        const unsubscribe = gameService.subscribeToGame(initialGame.id, (updatedGame) => {
-            if (updatedGame) {
-                setGame(updatedGame);
-
-                // Update current player if exists
-                if (updatedGame.players && user) {
-                    const playerData = updatedGame.players.find(p => p.userId === user.uid);
-                    setCurrentPlayer(playerData);
-                }
-            }
-        });
-
-        return () => unsubscribe();
-    }, [initialGame?.id, user]);
-
-    // Also add this to ensure board is initialized:
-    useEffect(() => {
-        if (game && boardManager && !board) {
+        const initializeBoard = async () => {
             try {
-                // Initialize board with theme from game data
-                const theme = game.theme || game.boardId || 'classic_plains';
+                // Wait a tick to ensure boardManager is fully initialized
+                await new Promise(resolve => setTimeout(resolve, 0));
+
+                let theme = game.theme || game.boardId || game.boardType || 'magical_kingdom';
+
+                if (game.settings?.boardId) {
+                    theme = game.settings.boardId;
+                }
+
                 const playerCount = game.players?.length || 4;
 
+                console.log(`Initializing board for game ${game.id} with theme ${theme}`);
+
+                // Create board
                 boardManager.createBoard(game.id, theme, playerCount);
                 const createdBoard = boardManager.getBoard(game.id);
+
+                if (!createdBoard) {
+                    throw new Error('Failed to create board');
+                }
+
                 setBoard(createdBoard);
 
                 // Add players to board manager
                 if (game.players && Array.isArray(game.players)) {
-                    game.players.forEach(player => {
-                        boardManager.addPlayer(game.id, {
-                            userId: player.userId,
-                            displayName: player.name || player.displayName,
-                            ...player
-                        });
+                    game.players.forEach((player, index) => {
+                        if (player && player.userId) {
+                            try {
+                                boardManager.addPlayer(game.id, {
+                                    userId: player.userId,
+                                    displayName: player.name || player.displayName || `Player ${index + 1}`,
+                                    coins: player.coins || 10,
+                                    stars: player.stars || 0,
+                                    position: player.position || 0
+                                });
+                            } catch (err) {
+                                console.warn(`Failed to add player ${player.userId}:`, err);
+                            }
+                        }
                     });
                 }
 
                 // Set game instance
                 const instance = boardManager.getGameInstance(game.id);
-                setGameInstance(instance);
+                if (instance) {
+                    setGameInstance(instance);
+
+                    // Start game if status is active
+                    if (game.status === 'active' && instance.players.size >= 2) {
+                        try {
+                            boardManager.startGame(game.id);
+                        } catch (err) {
+                            console.warn('Failed to start game:', err);
+                        }
+                    }
+                }
 
                 // Get initial stats
                 const stats = boardManager.getGameStats(game.id);
                 setGameStats(stats);
+
+                console.log(`Party game initialized with ${createdBoard.spaces.length} spaces`);
             } catch (error) {
                 console.error('Failed to initialize board:', error);
-                setError('Failed to initialize game board');
+                setError(`Failed to initialize game board: ${error.message}`);
             }
-        }
-    }, [game, boardManager, board]);
+        };
+
+        initializeBoard();
+    }, [game?.id, boardManager, board]);
 
     if (loading && !board) {
         return (

@@ -1,5 +1,5 @@
-// src/systems/party-board-manager.js
-// Refactored board manager for standard-sized Mario Party-style boards
+// src/systems/board-manager.js
+// Simplified board manager for single magical kingdom theme
 
 import { BoardGenerator, BOARD_THEMES } from './board-system';
 
@@ -9,24 +9,17 @@ export class BoardManager {
         this.gameInstances = new Map();
         this.playerPositions = new Map();
         this.gameStats = new Map();
-        this.generators = new Map();
         
-        // Initialize generators for each theme
-        Object.values(BOARD_THEMES).forEach(theme => {
-            this.generators.set(theme.id, new BoardGenerator(theme));
-        });
+        // Only one theme - Magical Kingdom
+        this.generator = new BoardGenerator(BOARD_THEMES.MAGICAL_KINGDOM);
     }
 
-    // Create a new standard board instance
-    createBoard(gameId, themeId = 'classic_plains', playerCount = 4) {
-        console.log(`Creating board for game ${gameId} with theme ${themeId}`);
+    // Create a new board instance (always magical kingdom)
+    createBoard(gameId, themeId = 'magical_kingdom', playerCount = 4) {
+        console.log(`Creating Magical Kingdom board for game ${gameId}`);
         
-        const generator = this.generators.get(themeId);
-        if (!generator) {
-            throw new Error(`Unknown theme: ${themeId}`);
-        }
-
-        const board = generator.generateBoard(playerCount);
+        // Always use magical kingdom theme
+        const board = this.generator.generateBoard(playerCount);
         this.boards.set(gameId, board);
 
         // Initialize game instance
@@ -39,19 +32,36 @@ export class BoardManager {
             gameState: 'waiting',
             startTime: Date.now(),
             settings: {
-                maxTurns: 20, // Standard game length
-                turnTimeLimit: 60000, // 1 minute per turn
-                maxPlayers: 8
+                maxTurns: 30,
+                turnTimeLimit: 60000,
+                maxPlayers: 8,
+                starCost: 20,
+                initialCoins: 10,
+                coinsPerBlueSpace: 3,
+                coinsPerRedSpace: -3
+            },
+            // Track special game events
+            events: {
+                starsCollected: 0,
+                minigamesPlayed: 0,
+                totalCoinsEarned: 0,
+                totalCoinsLost: 0,
+                warpsUsed: 0,
+                itemsUsed: 0
             }
         };
 
         this.gameInstances.set(gameId, gameInstance);
+        
+        // Initialize game statistics
         this.gameStats.set(gameId, {
             totalMoves: 0,
             spacesLanded: new Map(),
             playersJoined: 0,
             gameStarted: false,
-            gameEnded: false
+            gameEnded: false,
+            gameHistory: [],
+            achievements: []
         });
 
         return board;
@@ -67,244 +77,443 @@ export class BoardManager {
         return this.gameInstances.get(gameId);
     }
 
-    // Add player to board
+    // Add player to board with enhanced visuals
     addPlayer(gameId, player) {
+        if (!gameId || !player || !player.userId) {
+            console.warn('Invalid player data:', { gameId, player });
+            return false;
+        }
+        
         const gameInstance = this.gameInstances.get(gameId);
         const board = this.boards.get(gameId);
         
         if (!gameInstance || !board) {
-            throw new Error(`Game ${gameId} not found`);
+            console.warn(`Game ${gameId} not found when adding player`);
+            return false;
         }
 
-        // Check player limit
         if (gameInstance.players.size >= board.maxPlayers) {
             throw new Error('Game is full');
         }
 
-        // Add player to game
+        // Enhanced player data
         gameInstance.players.set(player.userId, {
-            ...player,
-            position: 0, // Start at space 0
-            coins: 10,   // Starting coins
-            stars: 0,    // Starting stars
-            items: [],   // Starting items
-            joinTime: Date.now()
+            userId: player.userId,
+            displayName: player.displayName || 'Unknown Player',
+            position: 0,
+            coins: gameInstance.settings.initialCoins,
+            stars: 0,
+            items: [],
+            joinTime: Date.now(),
+            colorIndex: gameInstance.players.size, // For visual representation
+            stats: {
+                spacesMovedTotal: 0,
+                coinsEarnedTotal: 0,
+                coinsLostTotal: 0,
+                minigamesWon: 0,
+                minigamesPlayed: 0,
+                itemsUsed: 0
+            },
+            achievements: [],
+            ...player
         });
 
-        // Set initial position
         this.playerPositions.set(player.userId, 0);
 
-        // Add to turn order if not already there
         if (!gameInstance.turnOrder.includes(player.userId)) {
             gameInstance.turnOrder.push(player.userId);
         }
 
-        // Update stats
         const stats = this.gameStats.get(gameId);
-        stats.playersJoined = gameInstance.players.size;
+        if (stats) {
+            stats.playersJoined = gameInstance.players.size;
+        }
 
-        console.log(`Player ${player.displayName} added to game ${gameId}`);
+        console.log(`Player ${player.displayName} joined the Magical Kingdom!`);
         return true;
     }
 
-    // Remove player from board
-    removePlayer(gameId, userId) {
+    // Move player with animations and effects
+    movePlayer(gameId, userId, spaces) {
         const gameInstance = this.gameInstances.get(gameId);
-        if (!gameInstance) return false;
-
-        gameInstance.players.delete(userId);
-        this.playerPositions.delete(userId);
-        
-        // Remove from turn order
-        const turnIndex = gameInstance.turnOrder.indexOf(userId);
-        if (turnIndex !== -1) {
-            gameInstance.turnOrder.splice(turnIndex, 1);
-        }
-
-        // Update current turn if necessary
-        if (gameInstance.currentTurn >= gameInstance.turnOrder.length) {
-            gameInstance.currentTurn = 0;
-        }
-
-        console.log(`Player ${userId} removed from game ${gameId}`);
-        return true;
-    }
-
-    // Move player to a specific space
-    movePlayer(gameId, userId, targetSpaceId) {
         const board = this.boards.get(gameId);
-        const gameInstance = this.gameInstances.get(gameId);
         
-        if (!board || !gameInstance) {
-            throw new Error(`Game ${gameId} not found`);
-        }
-
+        if (!gameInstance || !board) return null;
+        
         const player = gameInstance.players.get(userId);
-        if (!player) {
-            throw new Error(`Player ${userId} not found in game`);
-        }
-
-        const targetSpace = board.spaces.find(space => space.id === targetSpaceId);
-        if (!targetSpace) {
-            throw new Error(`Space ${targetSpaceId} not found`);
-        }
-
-        // Update player position
-        player.position = targetSpaceId;
-        this.playerPositions.set(userId, targetSpaceId);
-
+        if (!player) return null;
+        
+        const currentPos = this.playerPositions.get(userId) || 0;
+        const boardSpaces = board.spaces;
+        const currentSpace = boardSpaces.find(s => s.id === currentPos);
+        
+        if (!currentSpace) return null;
+        
+        // Calculate movement path
+        const path = this.calculateMovementPath(currentSpace, spaces, boardSpaces);
+        
+        // Update position
+        const finalPosition = path[path.length - 1];
+        this.playerPositions.set(userId, finalPosition.id);
+        player.position = finalPosition.id;
+        
         // Update stats
+        player.stats.spacesMovedTotal += spaces;
+        
         const stats = this.gameStats.get(gameId);
-        stats.totalMoves++;
+        if (stats) {
+            stats.totalMoves++;
+            const landCount = stats.spacesLanded.get(finalPosition.type) || 0;
+            stats.spacesLanded.set(finalPosition.type, landCount + 1);
+        }
         
-        const spaceCount = stats.spacesLanded.get(targetSpace.type) || 0;
-        stats.spacesLanded.set(targetSpace.type, spaceCount + 1);
-
-        console.log(`Player ${userId} moved to space ${targetSpaceId} (${targetSpace.type})`);
-        
+        // Return movement data for animation
         return {
-            newPosition: targetSpaceId,
-            spaceType: targetSpace.type,
-            spaceEffect: this.getSpaceEffect(targetSpace, player)
+            player: player,
+            path: path,
+            finalSpace: finalPosition,
+            effects: this.getMovementEffects(path, finalPosition)
         };
     }
 
-    // Get valid moves for a player
-    getValidMoves(gameId, userId, diceRoll) {
-        const board = this.boards.get(gameId);
-        const currentPosition = this.playerPositions.get(userId);
+    // Calculate movement path for animation
+    calculateMovementPath(startSpace, spacesToMove, allSpaces) {
+        const path = [];
+        let currentSpace = startSpace;
+        let remainingMoves = spacesToMove;
         
-        if (!board || currentPosition === undefined) {
-            return [];
-        }
-
-        const currentSpace = board.spaces.find(space => space.id === currentPosition);
-        if (!currentSpace) {
-            return [];
-        }
-
-        // For standard boards, movement is simple linear progression
-        const validMoves = [];
-        let movesRemaining = diceRoll;
-        let currentSpaceId = currentPosition;
-
-        while (movesRemaining > 0) {
-            const space = board.spaces.find(s => s.id === currentSpaceId);
-            if (!space || space.connections.length === 0) break;
-
-            // For main path, take the first connection (forward movement)
-            // For branches, player can choose direction
-            const nextSpaceId = space.connections[0];
-            validMoves.push(nextSpaceId);
+        while (remainingMoves > 0 && currentSpace) {
+            // Find next space
+            const nextSpaceId = currentSpace.connections[0]; // Simple forward movement
+            const nextSpace = allSpaces.find(s => s.id === nextSpaceId);
             
-            currentSpaceId = nextSpaceId;
-            movesRemaining--;
+            if (nextSpace) {
+                path.push(nextSpace);
+                currentSpace = nextSpace;
+                remainingMoves--;
+            } else {
+                break;
+            }
         }
-
-        return validMoves;
+        
+        return path;
     }
 
-    // Get space effect when player lands on it
-    getSpaceEffect(space, player) {
+    // Get visual effects for movement
+    getMovementEffects(path, finalSpace) {
         const effects = [];
-
-        switch (space.type) {
-            case 'BLUE':
-                effects.push({
-                    type: 'coins',
-                    amount: 3,
-                    message: 'Gained 3 coins!'
-                });
-                player.coins += 3;
-                break;
-
-            case 'RED':
-                const coinsToLose = Math.min(3, player.coins);
-                effects.push({
-                    type: 'coins',
-                    amount: -coinsToLose,
-                    message: `Lost ${coinsToLose} coins!`
-                });
-                player.coins -= coinsToLose;
-                break;
-
-            case 'GREEN':
-                effects.push({
-                    type: 'event',
-                    message: 'Something happens!',
-                    eventType: 'random'
-                });
-                break;
-
-            case 'STAR':
-                if (player.coins >= 20) {
-                    effects.push({
-                        type: 'star_option',
-                        cost: 20,
-                        message: 'Buy a star for 20 coins?'
-                    });
-                } else {
-                    effects.push({
-                        type: 'message',
-                        message: 'Not enough coins for a star!'
-                    });
-                }
-                break;
-
-            case 'CHANCE':
-                effects.push({
-                    type: 'minigame',
-                    gameType: 'chance_time',
-                    message: 'Chance Time!'
-                });
-                break;
-
-            case 'SHOP':
-                effects.push({
-                    type: 'shop',
-                    message: 'Welcome to the shop!',
-                    items: space.special?.shopItems || []
-                });
-                break;
-
-            default:
-                effects.push({
-                    type: 'message',
-                    message: 'Nothing happens...'
-                });
-        }
-
+        
+        // Trail effect along path
+        effects.push({
+            type: 'trail',
+            path: path.map(s => ({ x: s.x, y: s.y })),
+            color: '#fbbf24',
+            duration: 1000
+        });
+        
+        // Landing effect based on space type
+        const landingEffects = {
+            'STAR': { type: 'starburst', color: '#fbbf24', particles: 20 },
+            'SHOP': { type: 'coins', color: '#f59e0b', particles: 10 },
+            'CHANCE': { type: 'swirl', color: '#8b5cf6', particles: 15 },
+            'WARP': { type: 'portal', color: '#14b8a6', particles: 25 },
+            'GREEN': { type: 'bounce', color: '#10b981', particles: 12 },
+            'RED': { type: 'shake', color: '#ef4444', particles: 8 },
+            'BLUE': { type: 'sparkle', color: '#3b82f6', particles: 10 }
+        };
+        
+        const landEffect = landingEffects[finalSpace.type] || landingEffects['BLUE'];
+        effects.push({
+            ...landEffect,
+            x: finalSpace.x,
+            y: finalSpace.y,
+            delay: 500
+        });
+        
         return effects;
     }
 
-    // Get current player whose turn it is
-    getCurrentPlayer(gameId) {
+    // Handle landing on space
+    handleSpaceLanding(gameId, userId, space) {
         const gameInstance = this.gameInstances.get(gameId);
-        if (!gameInstance || gameInstance.turnOrder.length === 0) {
-            return null;
+        if (!gameInstance) return null;
+        
+        const player = gameInstance.players.get(userId);
+        if (!player) return null;
+        
+        const results = {
+            type: space.type,
+            effects: [],
+            changes: {}
+        };
+        
+        switch (space.type) {
+            case 'BLUE':
+                player.coins += gameInstance.settings.coinsPerBlueSpace;
+                player.stats.coinsEarnedTotal += gameInstance.settings.coinsPerBlueSpace;
+                results.changes.coins = gameInstance.settings.coinsPerBlueSpace;
+                results.effects.push({ type: 'coin_gain', amount: gameInstance.settings.coinsPerBlueSpace });
+                break;
+                
+            case 'RED':
+                const loss = Math.min(player.coins, Math.abs(gameInstance.settings.coinsPerRedSpace));
+                player.coins -= loss;
+                player.stats.coinsLostTotal += loss;
+                results.changes.coins = -loss;
+                results.effects.push({ type: 'coin_loss', amount: loss });
+                break;
+                
+            case 'STAR':
+                if (player.coins >= gameInstance.settings.starCost) {
+                    results.canBuyStar = true;
+                    results.starCost = gameInstance.settings.starCost;
+                }
+                break;
+                
+            case 'SHOP':
+                results.shopAvailable = true;
+                results.items = this.getShopItems();
+                break;
+                
+            case 'CHANCE':
+                results.chanceEvent = this.triggerChanceEvent(player);
+                break;
+                
+            case 'WARP':
+                results.warpAvailable = true;
+                results.warpTargets = this.getWarpTargets(space, gameInstance.board.spaces);
+                break;
+                
+            case 'GREEN':
+                results.event = this.triggerRandomEvent(player, gameInstance);
+                break;
+                
+            case 'HAPPENING':
+                results.miniGame = {
+                    type: 'random',
+                    players: this.getMinigamePlayers(gameInstance)
+                };
+                break;
         }
-
-        const currentUserId = gameInstance.turnOrder[gameInstance.currentTurn];
-        return gameInstance.players.get(currentUserId);
+        
+        // Update game events
+        if (gameInstance.events) {
+            if (results.changes.coins > 0) {
+                gameInstance.events.totalCoinsEarned += results.changes.coins;
+            } else if (results.changes.coins < 0) {
+                gameInstance.events.totalCoinsLost += Math.abs(results.changes.coins);
+            }
+        }
+        
+        return results;
     }
 
-    // Advance to next player's turn
-    nextTurn(gameId) {
-        const gameInstance = this.gameInstances.get(gameId);
-        if (!gameInstance) {
-            throw new Error(`Game ${gameId} not found`);
-        }
+    // Get available shop items
+    getShopItems() {
+        return [
+            {
+                id: 'double_dice',
+                name: 'Double Dice',
+                cost: 15,
+                description: 'Roll two dice on your next turn',
+                icon: '🎲🎲'
+            },
+            {
+                id: 'coin_magnet',
+                name: 'Coin Magnet',
+                cost: 10,
+                description: 'Double coins from blue spaces for 3 turns',
+                icon: '🧲'
+            },
+            {
+                id: 'star_discount',
+                name: 'Star Discount',
+                cost: 12,
+                description: 'Next star costs 10 coins instead of 20',
+                icon: '💫'
+            },
+            {
+                id: 'warp_pipe',
+                name: 'Warp Pipe',
+                cost: 8,
+                description: 'Teleport to any space on your next turn',
+                icon: '🌀'
+            }
+        ];
+    }
 
-        gameInstance.currentTurn = (gameInstance.currentTurn + 1) % gameInstance.turnOrder.length;
+    // Trigger chance event
+    triggerChanceEvent(player) {
+        const events = [
+            {
+                id: 'coin_bonus',
+                description: 'Lucky! Gain 10 coins!',
+                effect: () => {
+                    player.coins += 10;
+                    player.stats.coinsEarnedTotal += 10;
+                    return { coins: 10 };
+                }
+            },
+            {
+                id: 'coin_penalty',
+                description: 'Unlucky! Lose 5 coins!',
+                effect: () => {
+                    const loss = Math.min(player.coins, 5);
+                    player.coins -= loss;
+                    player.stats.coinsLostTotal += loss;
+                    return { coins: -loss };
+                }
+            },
+            {
+                id: 'teleport',
+                description: 'Magical teleportation!',
+                effect: () => {
+                    return { teleport: true };
+                }
+            },
+            {
+                id: 'item_gift',
+                description: 'Receive a random item!',
+                effect: () => {
+                    const items = this.getShopItems();
+                    const randomItem = items[Math.floor(Math.random() * items.length)];
+                    player.items.push(randomItem.id);
+                    return { item: randomItem };
+                }
+            }
+        ];
         
-        return this.getCurrentPlayer(gameId);
+        const event = events[Math.floor(Math.random() * events.length)];
+        const result = event.effect();
+        
+        return {
+            ...event,
+            result
+        };
+    }
+
+    // Trigger random event
+    triggerRandomEvent(player, gameInstance) {
+        const events = [
+            {
+                name: 'Coin Shower',
+                description: 'Coins rain from the sky!',
+                effect: () => {
+                    const amount = Math.floor(Math.random() * 10) + 5;
+                    player.coins += amount;
+                    return { type: 'coin_rain', amount };
+                }
+            },
+            {
+                name: 'Star Movement',
+                description: 'The star has moved to a new location!',
+                effect: () => {
+                    // Move star logic here
+                    return { type: 'star_move' };
+                }
+            },
+            {
+                name: 'Everyone Gets Coins',
+                description: 'Everyone receives 5 coins!',
+                effect: () => {
+                    gameInstance.players.forEach(p => {
+                        p.coins += 5;
+                    });
+                    return { type: 'coin_party', amount: 5 };
+                }
+            }
+        ];
+        
+        const event = events[Math.floor(Math.random() * events.length)];
+        const result = event.effect();
+        
+        return {
+            ...event,
+            result
+        };
+    }
+
+    // Get warp targets
+    getWarpTargets(currentSpace, allSpaces) {
+        return allSpaces
+            .filter(s => s.type === 'WARP' && s.id !== currentSpace.id)
+            .map(s => ({
+                id: s.id,
+                name: `Warp to ${s.decorations?.[0] || 'Portal'}`,
+                x: s.x,
+                y: s.y
+            }));
+    }
+
+    // Get players for minigame
+    getMinigamePlayers(gameInstance) {
+        return Array.from(gameInstance.players.values())
+            .map(p => ({
+                userId: p.userId,
+                displayName: p.displayName,
+                colorIndex: p.colorIndex
+            }));
+    }
+
+    // Purchase star
+    purchaseStar(gameId, userId) {
+        const gameInstance = this.gameInstances.get(gameId);
+        if (!gameInstance) return false;
+        
+        const player = gameInstance.players.get(userId);
+        if (!player || player.coins < gameInstance.settings.starCost) return false;
+        
+        player.coins -= gameInstance.settings.starCost;
+        player.stars += 1;
+        
+        if (gameInstance.events) {
+            gameInstance.events.starsCollected++;
+        }
+        
+        // Check for achievements
+        this.checkAchievements(player, gameInstance);
+        
+        return true;
+    }
+
+    // Check for achievements
+    checkAchievements(player, gameInstance) {
+        const achievements = [];
+        
+        // First star
+        if (player.stars === 1 && !player.achievements.includes('first_star')) {
+            player.achievements.push('first_star');
+            achievements.push({
+                id: 'first_star',
+                name: 'Star Collector',
+                description: 'Collected your first star!'
+            });
+        }
+        
+        // Coin hoarder
+        if (player.coins >= 50 && !player.achievements.includes('coin_hoarder')) {
+            player.achievements.push('coin_hoarder');
+            achievements.push({
+                id: 'coin_hoarder',
+                name: 'Coin Hoarder',
+                description: 'Accumulated 50 coins!'
+            });
+        }
+        
+        return achievements;
     }
 
     // Start the game
     startGame(gameId) {
+        if (!gameId) {
+            console.warn('Cannot start game: gameId is undefined');
+            return false;
+        }
+        
         const gameInstance = this.gameInstances.get(gameId);
         if (!gameInstance) {
-            throw new Error(`Game ${gameId} not found`);
+            console.warn(`Cannot start game: Game ${gameId} not found`);
+            return false;
         }
 
         if (gameInstance.players.size < 2) {
@@ -315,9 +524,16 @@ export class BoardManager {
         gameInstance.currentTurn = 0;
         
         const stats = this.gameStats.get(gameId);
-        stats.gameStarted = true;
+        if (stats) {
+            stats.gameStarted = true;
+            stats.gameHistory.push({
+                event: 'game_started',
+                timestamp: Date.now(),
+                players: gameInstance.players.size
+            });
+        }
 
-        console.log(`Game ${gameId} started with ${gameInstance.players.size} players`);
+        console.log(`Magical Kingdom adventure begins with ${gameInstance.players.size} players!`);
         return true;
     }
 
@@ -335,8 +551,28 @@ export class BoardManager {
             currentPlayers: gameInstance.players.size,
             gameState: gameInstance.gameState,
             currentTurn: gameInstance.currentTurn,
-            turnOrder: gameInstance.turnOrder
+            turnOrder: gameInstance.turnOrder,
+            events: gameInstance.events,
+            topPlayer: this.getTopPlayer(gameInstance)
         };
+    }
+
+    // Get player with most stars
+    getTopPlayer(gameInstance) {
+        let topPlayer = null;
+        let maxStars = -1;
+        let maxCoins = -1;
+        
+        gameInstance.players.forEach(player => {
+            if (player.stars > maxStars || 
+                (player.stars === maxStars && player.coins > maxCoins)) {
+                maxStars = player.stars;
+                maxCoins = player.coins;
+                topPlayer = player;
+            }
+        });
+        
+        return topPlayer;
     }
 
     // Clean up board and game data
@@ -345,36 +581,22 @@ export class BoardManager {
         this.gameInstances.delete(gameId);
         this.gameStats.delete(gameId);
         
-        console.log(`Board ${gameId} destroyed`);
-    }
-
-    // Get all available themes
-    getAvailableThemes() {
-        return Object.values(BOARD_THEMES);
-    }
-
-    // Get player position
-    getPlayerPosition(userId) {
-        return this.playerPositions.get(userId);
-    }
-
-    // Check if game is full
-    isGameFull(gameId) {
+        // Clean up player positions
         const gameInstance = this.gameInstances.get(gameId);
-        const board = this.boards.get(gameId);
-        
-        if (!gameInstance || !board) {
-            return false;
+        if (gameInstance) {
+            gameInstance.players.forEach((player, userId) => {
+                this.playerPositions.delete(userId);
+            });
         }
-
-        return gameInstance.players.size >= board.maxPlayers;
+        
+        console.log(`Magical Kingdom ${gameId} has been closed`);
     }
 
-    // Get game state
-    getGameState(gameId) {
-        const gameInstance = this.gameInstances.get(gameId);
-        return gameInstance?.gameState || 'not_found';
+    // Get available themes (only one now)
+    getAvailableThemes() {
+        return [BOARD_THEMES.MAGICAL_KINGDOM];
     }
 }
 
+// Export board themes from board-system
 export { BOARD_THEMES } from './board-system';

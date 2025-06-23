@@ -1,5 +1,5 @@
 // src/components/game/BoardRenderer.js
-// Optimized renderer for standard-sized Mario Party-style boards
+// Enhanced renderer with beautiful visuals and animations
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { SPACE_TYPES } from '../../systems/board-system';
@@ -15,314 +15,249 @@ const BoardRenderer = ({
     selectedSpace = null 
 }) => {
     const [viewCenter, setViewCenter] = useState({ x: 40, y: 30 });
-    const [zoom, setZoom] = useState(1.2);
+    const [zoom, setZoom] = useState(1.5);
     const [showMinimap, setShowMinimap] = useState(true);
     const [animatingPlayers, setAnimatingPlayers] = useState(new Set());
     const [spaceAnimations, setSpaceAnimations] = useState({});
     const [hoveredSpace, setHoveredSpace] = useState(null);
+    const [particles, setParticles] = useState([]);
 
     const canvasRef = useRef(null);
     const minimapRef = useRef(null);
     const animationRef = useRef(null);
     const lastUpdateTime = useRef(0);
+    const mousePos = useRef({ x: 0, y: 0 });
 
-    // Standard board styling constants (optimized for 80x60 boards)
-    const SPACE_SIZE = 32;
+    // Enhanced visual constants
+    const SPACE_SIZE = 40;
     const SPACE_BORDER_WIDTH = 3;
-    const PLAYER_SIZE = 20;
-    const MINIMAP_SIZE = 150;
+    const PLAYER_SIZE = 24;
+    const MINIMAP_SIZE = 180;
     const ANIMATION_SPEED = 0.08;
-    const BOARD_PADDING = 10;
+    const BOARD_PADDING = 20;
 
-    // Player colors for up to 8 players
+    // Enhanced color palette
     const PLAYER_COLORS = [
-        '#ef4444', '#3b82f6', '#10b981', '#f59e0b',
-        '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'
+        { primary: '#ef4444', secondary: '#dc2626', glow: '#fca5a5' },
+        { primary: '#3b82f6', secondary: '#2563eb', glow: '#93bbfc' },
+        { primary: '#10b981', secondary: '#059669', glow: '#6ee7b7' },
+        { primary: '#f59e0b', secondary: '#d97706', glow: '#fcd34d' },
+        { primary: '#8b5cf6', secondary: '#7c3aed', glow: '#c4b5fd' },
+        { primary: '#ec4899', secondary: '#db2777', glow: '#f9a8d4' },
+        { primary: '#06b6d4', secondary: '#0891b2', glow: '#67e8f9' },
+        { primary: '#84cc16', secondary: '#65a30d', glow: '#bef264' }
     ];
 
-    // Initialize view center 
-    useEffect(() => {
-        if (board) {
-            setViewCenter({ x: board.width / 2, y: board.height / 2 });
+    // Particle system for visual effects
+    class Particle {
+        constructor(x, y, type = 'star') {
+            this.x = x;
+            this.y = y;
+            this.type = type;
+            this.vx = (Math.random() - 0.5) * 2;
+            this.vy = (Math.random() - 0.5) * 2 - 1;
+            this.life = 1.0;
+            this.decay = 0.02;
+            this.size = Math.random() * 3 + 2;
+            this.rotation = Math.random() * Math.PI * 2;
+            this.rotationSpeed = (Math.random() - 0.5) * 0.1;
         }
-    }, [board]);
 
-    // Focus view on current player
-    useEffect(() => {
-        if (currentPlayer && boardManager && board) {
-            const playerPosition = boardManager.getPlayerPosition(currentPlayer.userId);
-            if (playerPosition !== undefined) {
-                const space = board.spaces.find(s => s.id === playerPosition);
-                if (space) {
-                    setViewCenter({ x: space.x, y: space.y });
-                }
+        update() {
+            this.x += this.vx;
+            this.y += this.vy;
+            this.life -= this.decay;
+            this.rotation += this.rotationSpeed;
+            this.vy += 0.05; // gravity
+        }
+
+        draw(ctx) {
+            if (this.life <= 0) return;
+
+            ctx.save();
+            ctx.globalAlpha = this.life;
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.rotation);
+
+            if (this.type === 'star') {
+                ctx.fillStyle = '#fbbf24';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#fbbf24';
+                this.drawStar(ctx, 0, 0, 5, this.size, this.size * 0.5);
+            } else if (this.type === 'coin') {
+                ctx.fillStyle = '#fde047';
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = '#fde047';
+                ctx.beginPath();
+                ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+                ctx.fill();
             }
-        }
-    }, [currentPlayer, boardManager, board]);
 
-    // Handle keyboard controls
-    useEffect(() => {
-        const handleKeyPress = (e) => {
-            const moveSpeed = 5;
-            switch (e.key) {
-                case 'ArrowUp':
-                    setViewCenter(prev => ({ ...prev, y: Math.max(0, prev.y - moveSpeed) }));
-                    break;
-                case 'ArrowDown':
-                    setViewCenter(prev => ({ ...prev, y: Math.min(board?.height || 60, prev.y + moveSpeed) }));
-                    break;
-                case 'ArrowLeft':
-                    setViewCenter(prev => ({ ...prev, x: Math.max(0, prev.x - moveSpeed) }));
-                    break;
-                case 'ArrowRight':
-                    setViewCenter(prev => ({ ...prev, x: Math.min(board?.width || 80, prev.x + moveSpeed) }));
-                    break;
-                case 'M':
-                case 'm':
-                    setShowMinimap(prev => !prev);
-                    break;
+            ctx.restore();
+        }
+
+        drawStar(ctx, x, y, spikes, outerRadius, innerRadius) {
+            let rot = Math.PI / 2 * 3;
+            let step = Math.PI / spikes;
+
+            ctx.beginPath();
+            ctx.moveTo(x, y - outerRadius);
+
+            for (let i = 0; i < spikes; i++) {
+                ctx.lineTo(x + Math.cos(rot) * outerRadius, y + Math.sin(rot) * outerRadius);
+                rot += step;
+                ctx.lineTo(x + Math.cos(rot) * innerRadius, y + Math.sin(rot) * innerRadius);
+                rot += step;
             }
-        };
 
-        window.addEventListener('keydown', handleKeyPress);
-        return () => window.removeEventListener('keydown', handleKeyPress);
-    }, [board]);
-
-    // Handle mouse wheel zoom
-    const handleWheel = (e) => {
-        e.preventDefault();
-        const zoomDelta = e.deltaY > 0 ? -0.1 : 0.1;
-        setZoom(prev => Math.max(0.5, Math.min(2.0, prev + zoomDelta)));
-    };
-
-    // Handle canvas click
-    const handleCanvasClick = (e) => {
-        if (!board || !canvasRef.current) return;
-
-        const canvas = canvasRef.current;
-        const rect = canvas.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
-        const clickY = e.clientY - rect.top;
-
-        // Convert screen coordinates to board coordinates
-        const spaceSize = SPACE_SIZE * zoom;
-        const canvasWidth = canvas.width;
-        const canvasHeight = canvas.height;
-        
-        const boardX = viewCenter.x + (clickX - canvasWidth / 2) / spaceSize;
-        const boardY = viewCenter.y + (clickY - canvasHeight / 2) / spaceSize;
-
-        // Find clicked space
-        const clickedSpace = board.spaces.find(space => {
-            const dx = Math.abs(space.x - boardX);
-            const dy = Math.abs(space.y - boardY);
-            return dx < 1.5 && dy < 1.5;
-        });
-
-        if (clickedSpace && onSpaceClick) {
-            onSpaceClick(clickedSpace);
+            ctx.lineTo(x, y - outerRadius);
+            ctx.closePath();
+            ctx.fill();
         }
-    };
+    }
 
-    // Main animation loop
-    useEffect(() => {
-        const animate = (currentTime) => {
-            const deltaTime = currentTime - lastUpdateTime.current;
-            lastUpdateTime.current = currentTime;
-
-            renderBoard(deltaTime);
-            if (showMinimap) renderMinimap();
-            
-            animationRef.current = requestAnimationFrame(animate);
-        };
+    // Enhanced theme background with animated gradient
+    const drawThemeBackground = useCallback((ctx, width, height, deltaTime) => {
+        const time = Date.now() * 0.0001;
         
-        animationRef.current = requestAnimationFrame(animate);
-        
-        return () => {
-            if (animationRef.current) {
-                cancelAnimationFrame(animationRef.current);
-            }
-        };
-    }, [board, boardManager, viewCenter, zoom, validMoves, selectedSpace, game, currentPlayer, showMinimap]);
-
-    // Main board rendering function
-    const renderBoard = useCallback((deltaTime) => {
-        if (!board || !canvasRef.current) return;
-
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-
-        // Set canvas size to match container
-        if (canvas.width !== canvas.offsetWidth || canvas.height !== canvas.offsetHeight) {
-            canvas.width = canvas.offsetWidth;
-            canvas.height = canvas.offsetHeight;
-        }
-
-        const spaceSize = SPACE_SIZE * zoom;
-        const canvasWidth = canvas.width;
-        const canvasHeight = canvas.height;
-
-        // Clear canvas with theme background
-        drawThemeBackground(ctx, canvasWidth, canvasHeight);
-
-        // Calculate what's visible (optimized for smaller boards)
-        const visibleSpaces = board.spaces.filter(space => {
-            const screenX = (space.x - viewCenter.x) * spaceSize + canvasWidth / 2;
-            const screenY = (space.y - viewCenter.y) * spaceSize + canvasHeight / 2;
-            return screenX > -spaceSize && screenX < canvasWidth + spaceSize &&
-                   screenY > -spaceSize && screenY < canvasHeight + spaceSize;
-        });
-
-        // Draw path connections
-        drawSpaceConnections(ctx, visibleSpaces, spaceSize, canvasWidth, canvasHeight);
-
-        // Draw landmarks
-        if (board.landmarks) {
-            drawLandmarks(ctx, board.landmarks, spaceSize, canvasWidth, canvasHeight);
-        }
-
-        // Draw spaces
-        visibleSpaces.forEach(space => {
-            drawSpace(ctx, space, spaceSize, canvasWidth, canvasHeight, deltaTime);
-        });
-
-        // Draw players
-        drawPlayers(ctx, visibleSpaces, spaceSize, canvasWidth, canvasHeight);
-
-        // Draw UI overlays
-        drawUIOverlays(ctx, canvasWidth, canvasHeight);
-
-    }, [board, boardManager, viewCenter, zoom, validMoves, selectedSpace, game, currentPlayer, spaceAnimations, hoveredSpace]);
-
-    // Draw theme background
-    const drawThemeBackground = (ctx, width, height) => {
-        if (!board?.theme) return;
-
+        // Create animated gradient
         const gradient = ctx.createLinearGradient(0, 0, width, height);
-        gradient.addColorStop(0, board.theme.backgroundColor);
-        gradient.addColorStop(1, adjustBrightness(board.theme.backgroundColor, -15));
+        const hue1 = (time * 10) % 360;
+        const hue2 = (hue1 + 60) % 360;
+        
+        if (board?.theme?.id === 'classic_plains') {
+            gradient.addColorStop(0, '#1e3a5f'); // Deep blue sky
+            gradient.addColorStop(0.5, '#2d5a8e');
+            gradient.addColorStop(1, '#1e3a5f');
+        } else if (board?.theme?.id === 'crystal_cave') {
+            gradient.addColorStop(0, '#0f172a'); // Dark cave
+            gradient.addColorStop(0.5, '#1e293b');
+            gradient.addColorStop(1, '#0f172a');
+        } else {
+            gradient.addColorStop(0, '#0c4a6e'); // Ocean blue
+            gradient.addColorStop(0.5, '#0284c7');
+            gradient.addColorStop(1, '#0c4a6e');
+        }
         
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
-    };
 
-    // Draw connections between spaces
-    const drawSpaceConnections = (ctx, spaces, spaceSize, canvasWidth, canvasHeight) => {
-        ctx.save();
-        ctx.strokeStyle = board.theme?.pathColor || '#fbbf24';
-        ctx.lineWidth = 6 * zoom;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-
-        // Draw main path
-        const mainSpaces = spaces.filter(s => s.pathType === 'main').sort((a, b) => a.pathIndex - b.pathIndex);
-        
-        if (mainSpaces.length > 1) {
-            ctx.beginPath();
-            
-            for (let i = 0; i < mainSpaces.length; i++) {
-                const space = mainSpaces[i];
-                const nextSpace = mainSpaces[(i + 1) % mainSpaces.length];
-                
-                const x1 = (space.x - viewCenter.x) * spaceSize + canvasWidth / 2;
-                const y1 = (space.y - viewCenter.y) * spaceSize + canvasHeight / 2;
-                const x2 = (nextSpace.x - viewCenter.x) * spaceSize + canvasWidth / 2;
-                const y2 = (nextSpace.y - viewCenter.y) * spaceSize + canvasHeight / 2;
-                
-                if (i === 0) {
-                    ctx.moveTo(x1, y1);
-                }
-                ctx.lineTo(x2, y2);
+        // Add subtle pattern overlay
+        ctx.globalAlpha = 0.05;
+        for (let x = 0; x < width; x += 100) {
+            for (let y = 0; y < height; y += 100) {
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(x + Math.sin(time + x * 0.01) * 10, y + Math.cos(time + y * 0.01) * 10, 2, 2);
             }
-            
-            ctx.stroke();
         }
+        ctx.globalAlpha = 1.0;
+    }, [board?.theme?.id]);
 
-        // Draw branch connections
-        const branchSpaces = spaces.filter(s => s.pathType === 'branch');
-        const branches = groupBy(branchSpaces, 'branchId');
-        
-        Object.values(branches).forEach(branch => {
-            branch.sort((a, b) => a.pathIndex - b.pathIndex);
-            
-            ctx.beginPath();
-            branch.forEach((space, index) => {
-                const x = (space.x - viewCenter.x) * spaceSize + canvasWidth / 2;
-                const y = (space.y - viewCenter.y) * spaceSize + canvasHeight / 2;
-                
-                if (index === 0) {
-                    ctx.moveTo(x, y);
-                } else {
-                    ctx.lineTo(x, y);
-                }
-            });
-            ctx.stroke();
-        });
-
-        ctx.restore();
-    };
-
-    // Draw individual space
-    const drawSpace = (ctx, space, spaceSize, canvasWidth, canvasHeight, deltaTime) => {
+    // Enhanced space rendering with glow effects
+    const drawSpace = useCallback((ctx, space, spaceSize, canvasWidth, canvasHeight, deltaTime) => {
+        const spaceType = SPACE_TYPES[space.type] || SPACE_TYPES.BLUE;
         const x = (space.x - viewCenter.x) * spaceSize + canvasWidth / 2;
         const y = (space.y - viewCenter.y) * spaceSize + canvasHeight / 2;
-        
-        // Skip if completely off-screen
-        if (x < -spaceSize || x > canvasWidth + spaceSize || 
-            y < -spaceSize || y > canvasHeight + spaceSize) return;
+        const size = spaceSize * 0.8;
+        const time = Date.now() * 0.001;
 
         ctx.save();
 
-        const spaceType = SPACE_TYPES[space.type] || SPACE_TYPES.BLUE;
-        const size = spaceSize * 0.7;
-        
-        // Highlight if valid move
-        const isValidMove = validMoves.includes(space.id);
-        const isSelected = selectedSpace === space.id;
-        
-        if (isValidMove || isSelected) {
-            ctx.strokeStyle = isSelected ? '#ffffff' : '#ffff00';
-            ctx.lineWidth = 4;
-            ctx.setLineDash([5, 5]);
-            ctx.strokeRect(x - size/2 - 2, y - size/2 - 2, size + 4, size + 4);
-            ctx.setLineDash([]);
+        // Draw outer glow
+        if (validMoves.includes(space.id)) {
+            const pulseSize = size + Math.sin(time * 3) * 5;
+            const gradient = ctx.createRadialGradient(x, y, 0, x, y, pulseSize);
+            gradient.addColorStop(0, 'rgba(59, 130, 246, 0.4)');
+            gradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(x - pulseSize, y - pulseSize, pulseSize * 2, pulseSize * 2);
         }
 
-        // Draw space background
+        // Draw space shadow
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetX = 3;
+        ctx.shadowOffsetY = 3;
+
+        // Draw space with rounded corners
+        const radius = size * 0.15;
         ctx.fillStyle = spaceType.color;
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = SPACE_BORDER_WIDTH;
         
-        ctx.fillRect(x - size/2, y - size/2, size, size);
-        ctx.strokeRect(x - size/2, y - size/2, size, size);
+        this.roundRect(ctx, x - size/2, y - size/2, size, size, radius);
+        ctx.fill();
+        
+        // Reset shadow for border
+        ctx.shadowColor = 'transparent';
+        ctx.stroke();
 
-        // Draw space icon
+        // Draw inner highlight
+        ctx.save();
+        ctx.globalAlpha = 0.3;
+        const highlightGradient = ctx.createLinearGradient(x - size/2, y - size/2, x + size/2, y + size/2);
+        highlightGradient.addColorStop(0, '#ffffff');
+        highlightGradient.addColorStop(1, 'transparent');
+        ctx.fillStyle = highlightGradient;
+        this.roundRect(ctx, x - size/2 + 2, y - size/2 + 2, size - 4, size/2, radius);
+        ctx.fill();
+        ctx.restore();
+
+        // Draw space icon with glow
+        if (space.type === 'STAR' || space.type === 'SHOP') {
+            ctx.shadowColor = spaceType.color;
+            ctx.shadowBlur = 15;
+        }
+        
         ctx.fillStyle = spaceType.textColor;
-        ctx.font = `${Math.max(12, size * 0.4)}px Arial`;
+        ctx.font = `bold ${Math.max(16, size * 0.4)}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(spaceType.icon, x, y);
 
-        // Draw space number for debugging
-        if (zoom > 1.0) {
-            ctx.fillStyle = '#000000';
-            ctx.font = `${Math.max(8, size * 0.2)}px Arial`;
-            ctx.fillText(space.id, x, y + size/2 + 10);
+        // Draw space number with better visibility
+        if (zoom > 1.2) {
+            ctx.shadowColor = '#000000';
+            ctx.shadowBlur = 3;
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `bold ${Math.max(10, size * 0.2)}px Arial`;
+            ctx.fillText(space.id, x, y + size/2 + 12);
+        }
+
+        // Add hover effect
+        if (hoveredSpace === space.id) {
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 4;
+            ctx.globalAlpha = 0.5;
+            this.roundRect(ctx, x - size/2 - 4, y - size/2 - 4, size + 8, size + 8, radius);
+            ctx.stroke();
         }
 
         ctx.restore();
+    }, [viewCenter, zoom, validMoves, hoveredSpace]);
+
+    // Helper function for rounded rectangles
+    const roundRect = function(ctx, x, y, width, height, radius) {
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + width - radius, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+        ctx.lineTo(x + width, y + height - radius);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+        ctx.lineTo(x + radius, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
     };
 
-    // Draw players on spaces
+    // Enhanced player rendering with character sprites
     const drawPlayers = (ctx, visibleSpaces, spaceSize, canvasWidth, canvasHeight) => {
         if (!boardManager || !game || !game.players) return;
 
-        // Ensure game.players is an array
         const playersArray = Array.isArray(game.players) ? game.players : [];
-
-        // Group players by space
         const playersOnSpaces = new Map();
-
+        
         playersArray.forEach(player => {
             const position = boardManager.getPlayerPosition(player.userId);
             if (position !== undefined) {
@@ -333,7 +268,6 @@ const BoardRenderer = ({
             }
         });
 
-        // Draw players
         playersOnSpaces.forEach((players, spaceId) => {
             const space = visibleSpaces.find(s => s.id === spaceId);
             if (!space) return;
@@ -342,39 +276,71 @@ const BoardRenderer = ({
             const spaceY = (space.y - viewCenter.y) * spaceSize + canvasHeight / 2;
 
             players.forEach((player, index) => {
-                // Find player index safely
                 const playerIndex = playersArray.findIndex(p => p.userId === player.userId);
-                const color = PLAYER_COLORS[playerIndex >= 0 ? playerIndex % PLAYER_COLORS.length : 0];
-
-                // Arrange multiple players around the space
+                const colorScheme = PLAYER_COLORS[playerIndex % PLAYER_COLORS.length];
+                
                 const angle = (index / players.length) * 2 * Math.PI;
-                const radius = players.length > 1 ? spaceSize * 0.3 : 0;
+                const radius = players.length > 1 ? spaceSize * 0.35 : 0;
                 const x = spaceX + Math.cos(angle) * radius;
                 const y = spaceY + Math.sin(angle) * radius;
 
-                // Draw player
+                // Draw player shadow
                 ctx.save();
-                ctx.fillStyle = color;
+                ctx.globalAlpha = 0.3;
+                ctx.fillStyle = '#000000';
+                ctx.beginPath();
+                ctx.ellipse(x, y + PLAYER_SIZE * zoom * 0.45, PLAYER_SIZE * zoom * 0.35, PLAYER_SIZE * zoom * 0.15, 0, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.restore();
+
+                // Draw player glow
+                const glowGradient = ctx.createRadialGradient(x, y, 0, x, y, PLAYER_SIZE * zoom * 0.6);
+                glowGradient.addColorStop(0, colorScheme.glow + '40');
+                glowGradient.addColorStop(1, colorScheme.glow + '00');
+                ctx.fillStyle = glowGradient;
+                ctx.fillRect(x - PLAYER_SIZE * zoom, y - PLAYER_SIZE * zoom, PLAYER_SIZE * zoom * 2, PLAYER_SIZE * zoom * 2);
+
+                // Draw player piece
+                ctx.save();
+                ctx.shadowColor = colorScheme.primary;
+                ctx.shadowBlur = 10;
+                
+                // Outer ring
+                ctx.fillStyle = colorScheme.primary;
                 ctx.strokeStyle = '#ffffff';
                 ctx.lineWidth = 2;
-
                 ctx.beginPath();
                 ctx.arc(x, y, PLAYER_SIZE * zoom * 0.4, 0, 2 * Math.PI);
                 ctx.fill();
                 ctx.stroke();
 
-                // Draw player name if zoomed in
-                if (zoom > 0.8) {
+                // Inner circle
+                ctx.fillStyle = colorScheme.secondary;
+                ctx.beginPath();
+                ctx.arc(x, y, PLAYER_SIZE * zoom * 0.25, 0, 2 * Math.PI);
+                ctx.fill();
+
+                // Player indicator (current player gets a crown)
+                if (currentPlayer && player.userId === currentPlayer.userId) {
+                    ctx.fillStyle = '#fbbf24';
+                    ctx.font = `${PLAYER_SIZE * zoom * 0.5}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('👑', x, y - PLAYER_SIZE * zoom * 0.7);
+                }
+
+                // Draw player name
+                if (zoom > 1.0) {
                     ctx.fillStyle = '#ffffff';
                     ctx.strokeStyle = '#000000';
-                    ctx.lineWidth = 3;
-                    ctx.font = `${Math.max(10, PLAYER_SIZE * zoom * 0.5)}px Arial`;
+                    ctx.lineWidth = 4;
+                    ctx.font = `bold ${Math.max(12, PLAYER_SIZE * zoom * 0.5)}px Arial`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'top';
-
+                    
                     const name = player.name || player.displayName || `Player ${playerIndex + 1}`;
-                    const shortName = name.length > 8 ? name.substring(0, 8) + '...' : name;
-
+                    const shortName = name.length > 10 ? name.substring(0, 10) + '...' : name;
+                    
                     ctx.strokeText(shortName, x, y + PLAYER_SIZE * zoom * 0.5);
                     ctx.fillText(shortName, x, y + PLAYER_SIZE * zoom * 0.5);
                 }
@@ -384,152 +350,288 @@ const BoardRenderer = ({
         });
     };
 
-    // Draw landmarks
-    const drawLandmarks = (ctx, landmarks, spaceSize, canvasWidth, canvasHeight) => {
-        landmarks.forEach(landmark => {
-            const x = (landmark.x - viewCenter.x) * spaceSize + canvasWidth / 2;
-            const y = (landmark.y - viewCenter.y) * spaceSize + canvasHeight / 2;
-            
-            // Skip if off-screen
-            if (x < -100 || x > canvasWidth + 100 || y < -100 || y > canvasHeight + 100) return;
+    // Enhanced connection drawing with animated flow
+    const drawSpaceConnections = useCallback((ctx, spaces, spaceSize, canvasWidth, canvasHeight, deltaTime) => {
+        const time = Date.now() * 0.001;
+        const drawnConnections = new Set();
 
-            ctx.save();
-            
-            const size = landmark.size === 'large' ? spaceSize * 2 : spaceSize * 1.5;
-            
-            // Draw landmark shape
-            ctx.fillStyle = board.theme?.decorativeColor || '#16a34a';
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 3;
-            
-            ctx.beginPath();
-            ctx.arc(x, y, size * 0.4, 0, 2 * Math.PI);
-            ctx.fill();
-            ctx.stroke();
-            
-            // Draw landmark name
-            if (zoom > 0.7) {
-                ctx.fillStyle = '#ffffff';
-                ctx.strokeStyle = '#000000';
-                ctx.lineWidth = 2;
-                ctx.font = `${Math.max(12, size * 0.3)}px Arial`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'top';
+        spaces.forEach(space => {
+            if (!space.connections) return;
+
+            space.connections.forEach(targetId => {
+                const connectionKey = `${Math.min(space.id, targetId)}-${Math.max(space.id, targetId)}`;
+                if (drawnConnections.has(connectionKey)) return;
+                drawnConnections.add(connectionKey);
+
+                const targetSpace = spaces.find(s => s.id === targetId);
+                if (!targetSpace) return;
+
+                const x1 = (space.x - viewCenter.x) * spaceSize + canvasWidth / 2;
+                const y1 = (space.y - viewCenter.y) * spaceSize + canvasHeight / 2;
+                const x2 = (targetSpace.x - viewCenter.x) * spaceSize + canvasWidth / 2;
+                const y2 = (targetSpace.y - viewCenter.y) * spaceSize + canvasHeight / 2;
+
+                // Draw path shadow
+                ctx.save();
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.lineWidth = spaceSize * 0.25;
+                ctx.lineCap = 'round';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+                ctx.shadowOffsetY = 3;
                 
-                ctx.strokeText(landmark.name, x, y + size * 0.5);
-                ctx.fillText(landmark.name, x, y + size * 0.5);
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+                ctx.restore();
+
+                // Draw main path
+                const gradient = ctx.createLinearGradient(x1, y1, x2, y2);
+                gradient.addColorStop(0, board?.theme?.pathColor || '#fbbf24');
+                gradient.addColorStop(1, board?.theme?.pathColor || '#f59e0b');
+
+                ctx.strokeStyle = gradient;
+                ctx.lineWidth = spaceSize * 0.2;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+
+                // Draw animated dots along the path
+                const distance = Math.hypot(x2 - x1, y2 - y1);
+                const numDots = Math.floor(distance / 30);
+                
+                for (let i = 0; i < numDots; i++) {
+                    const progress = ((i / numDots + time * 0.2) % 1);
+                    const dotX = x1 + (x2 - x1) * progress;
+                    const dotY = y1 + (y2 - y1) * progress;
+                    
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                    ctx.beginPath();
+                    ctx.arc(dotX, dotY, 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+        });
+    }, [viewCenter, zoom, board?.theme?.pathColor]);
+
+    // Update particles
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setParticles(prev => {
+                const updated = prev.filter(p => p.life > 0);
+                updated.forEach(p => p.update());
+                return updated;
+            });
+        }, 1000 / 60);
+
+        return () => clearInterval(interval);
+    }, []);
+
+    // Main render loop
+    const renderBoard = useCallback((deltaTime) => {
+        if (!board || !canvasRef.current) return;
+
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+
+        if (canvas.width !== canvas.offsetWidth || canvas.height !== canvas.offsetHeight) {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+        }
+
+        const spaceSize = SPACE_SIZE * zoom;
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+
+        // Draw animated background
+        drawThemeBackground(ctx, canvasWidth, canvasHeight, deltaTime);
+
+        // Calculate visible spaces
+        const visibleSpaces = board.spaces.filter(space => {
+            const screenX = (space.x - viewCenter.x) * spaceSize + canvasWidth / 2;
+            const screenY = (space.y - viewCenter.y) * spaceSize + canvasHeight / 2;
+            return screenX > -spaceSize && screenX < canvasWidth + spaceSize &&
+                   screenY > -spaceSize && screenY < canvasHeight + spaceSize;
+        });
+
+        // Draw connections with animation
+        drawSpaceConnections(ctx, visibleSpaces, spaceSize, canvasWidth, canvasHeight, deltaTime);
+
+        // Draw spaces
+        visibleSpaces.forEach(space => {
+            drawSpace(ctx, space, spaceSize, canvasWidth, canvasHeight, deltaTime);
+        });
+
+        // Draw players
+        drawPlayers(ctx, visibleSpaces, spaceSize, canvasWidth, canvasHeight);
+
+        // Draw particles
+        particles.forEach(particle => particle.draw(ctx));
+
+        // Draw minimap
+        if (showMinimap && minimapRef.current) {
+            drawMinimap();
+        }
+    }, [board, viewCenter, zoom, drawThemeBackground, drawSpace, drawSpaceConnections, particles, showMinimap]);
+
+    // Animation loop
+    useEffect(() => {
+        const animate = (timestamp) => {
+            const deltaTime = timestamp - lastUpdateTime.current;
+            lastUpdateTime.current = timestamp;
+
+            renderBoard(deltaTime);
+            animationRef.current = requestAnimationFrame(animate);
+        };
+
+        animationRef.current = requestAnimationFrame(animate);
+        return () => {
+            if (animationRef.current) {
+                cancelAnimationFrame(animationRef.current);
             }
-            
-            ctx.restore();
-        });
-    };
+        };
+    }, [renderBoard]);
 
-    // Draw UI overlays
-    const drawUIOverlays = (ctx, canvasWidth, canvasHeight) => {
-        // Draw controls info
-        ctx.save();
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-        ctx.fillRect(10, canvasHeight - 100, 200, 90);
-        
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '12px Arial';
-        ctx.textAlign = 'left';
-        
-        const instructions = [
-            'Arrow Keys: Pan view',
-            'Mouse Wheel: Zoom',
-            'Click: Select space',
-            `M: Toggle minimap ${showMinimap ? '(ON)' : '(OFF)'}`,
-            `Zoom: ${Math.round(zoom * 100)}%`
-        ];
-        
-        instructions.forEach((text, index) => {
-            ctx.fillText(text, 15, canvasHeight - 80 + (index * 15));
-        });
-        
-        ctx.restore();
-    };
-
-    // Render minimap
-    const renderMinimap = useCallback(() => {
+    // Draw minimap
+    const drawMinimap = useCallback(() => {
         if (!board || !minimapRef.current) return;
 
         const canvas = minimapRef.current;
         const ctx = canvas.getContext('2d');
         const scale = MINIMAP_SIZE / Math.max(board.width, board.height);
 
-        // Clear minimap
-        ctx.fillStyle = 'rgba(20, 25, 35, 0.95)';
+        // Background
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
         ctx.fillRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
-
-        // Draw border
-        ctx.strokeStyle = '#64748b';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
 
         // Draw spaces
         board.spaces.forEach(space => {
-            const spaceType = SPACE_TYPES[space.type];
-            ctx.fillStyle = spaceType?.color || '#6b7280';
-            
             const x = space.x * scale;
             const y = space.y * scale;
-            const size = 3;
             
-            ctx.fillRect(x - size/2, y - size/2, size, size);
+            ctx.fillStyle = SPACE_TYPES[space.type]?.color || '#60a5fa';
+            ctx.fillRect(x - 2, y - 2, 4, 4);
         });
 
-        // Draw view area
-        const viewSize = 20 * scale;
-        const viewX = viewCenter.x * scale - viewSize/2;
-        const viewY = viewCenter.y * scale - viewSize/2;
-        
+        // Draw viewport
         ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(viewX, viewY, viewSize, viewSize);
+        ctx.lineWidth = 2;
+        const viewWidth = (canvasRef.current.width / zoom / SPACE_SIZE) * scale;
+        const viewHeight = (canvasRef.current.height / zoom / SPACE_SIZE) * scale;
+        const viewX = (viewCenter.x - canvasRef.current.width / zoom / SPACE_SIZE / 2) * scale;
+        const viewY = (viewCenter.y - canvasRef.current.height / zoom / SPACE_SIZE / 2) * scale;
+        ctx.strokeRect(viewX, viewY, viewWidth, viewHeight);
+    }, [board, viewCenter, zoom]);
 
-    }, [board, viewCenter]);
+    // Handle mouse movement for hover effects
+    const handleMouseMove = useCallback((e) => {
+        const canvas = canvasRef.current;
+        if (!canvas || !board) return;
 
-    // Utility functions
-    const adjustBrightness = (color, percent) => {
-        // Simple brightness adjustment
-        const num = parseInt(color.replace("#", ""), 16);
-        const amt = Math.round(2.55 * percent);
-        const R = (num >> 16) + amt;
-        const G = (num >> 8 & 0x00FF) + amt;
-        const B = (num & 0x0000FF) + amt;
-        return "#" + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
-            (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
-            (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
-    };
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        mousePos.current = { x, y };
 
-    const groupBy = (array, key) => {
-        return array.reduce((groups, item) => {
-            const group = item[key];
-            groups[group] = groups[group] || [];
-            groups[group].push(item);
-            return groups;
-        }, {});
-    };
+        // Find hovered space
+        const spaceSize = SPACE_SIZE * zoom;
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+
+        let foundSpace = null;
+        for (const space of board.spaces) {
+            const spaceX = (space.x - viewCenter.x) * spaceSize + canvasWidth / 2;
+            const spaceY = (space.y - viewCenter.y) * spaceSize + canvasHeight / 2;
+            const size = spaceSize * 0.8;
+
+            if (x >= spaceX - size/2 && x <= spaceX + size/2 &&
+                y >= spaceY - size/2 && y <= spaceY + size/2) {
+                foundSpace = space.id;
+                break;
+            }
+        }
+
+        setHoveredSpace(foundSpace);
+    }, [board, viewCenter, zoom]);
+
+    // Handle canvas click
+    const handleCanvasClick = useCallback((e) => {
+        if (hoveredSpace !== null && onSpaceClick) {
+            onSpaceClick(hoveredSpace);
+            
+            // Create particle effect
+            const rect = canvasRef.current.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const newParticles = [];
+            for (let i = 0; i < 10; i++) {
+                newParticles.push(new Particle(x, y, Math.random() > 0.5 ? 'star' : 'coin'));
+            }
+            setParticles(prev => [...prev, ...newParticles]);
+        }
+    }, [hoveredSpace, onSpaceClick]);
+
+    // Handle zoom
+    const handleWheel = useCallback((e) => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        setZoom(prev => Math.max(0.5, Math.min(3, prev * delta)));
+    }, []);
 
     return (
-        <div className="relative w-full h-full">
+        <div className="relative w-full h-full bg-gray-900 rounded-lg overflow-hidden shadow-2xl">
             <canvas
                 ref={canvasRef}
-                className="w-full h-full cursor-crosshair"
+                className="w-full h-full cursor-pointer"
                 onClick={handleCanvasClick}
+                onMouseMove={handleMouseMove}
                 onWheel={handleWheel}
-                style={{ background: '#1e293b' }}
             />
             
             {showMinimap && (
-                <canvas
-                    ref={minimapRef}
-                    width={MINIMAP_SIZE}
-                    height={MINIMAP_SIZE}
-                    className="absolute top-4 right-4 border border-gray-600 rounded"
-                />
+                <div className="absolute top-4 right-4 rounded-lg overflow-hidden shadow-lg border-2 border-gray-700">
+                    <canvas
+                        ref={minimapRef}
+                        width={MINIMAP_SIZE}
+                        height={MINIMAP_SIZE}
+                        className="bg-gray-800"
+                    />
+                </div>
             )}
+
+            {/* Controls overlay */}
+            <div className="absolute bottom-4 left-4 flex gap-2">
+                <button
+                    onClick={() => setZoom(prev => Math.min(3, prev * 1.2))}
+                    className="bg-gray-800 bg-opacity-80 text-white p-2 rounded-lg hover:bg-opacity-100 transition-all"
+                >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                    </svg>
+                </button>
+                <button
+                    onClick={() => setZoom(prev => Math.max(0.5, prev * 0.8))}
+                    className="bg-gray-800 bg-opacity-80 text-white p-2 rounded-lg hover:bg-opacity-100 transition-all"
+                >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
+                    </svg>
+                </button>
+                <button
+                    onClick={() => setShowMinimap(!showMinimap)}
+                    className="bg-gray-800 bg-opacity-80 text-white p-2 rounded-lg hover:bg-opacity-100 transition-all"
+                >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                    </svg>
+                </button>
+            </div>
         </div>
     );
 };
