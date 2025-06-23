@@ -14,7 +14,7 @@ export function GameLobby({ user, onJoinGame, onSignOut, energySystem, boardSyst
   const [gameCode, setGameCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [boardType, setBoardType] = useState('jungle_adventure');
+  const [boardType, setBoardType] = useState('classic_plains');
   const [gameMode, setGameMode] = useState('classic');
   const [currentEnergy, setCurrentEnergy] = useState(5);
   const [showEnergyWarning, setShowEnergyWarning] = useState(false);
@@ -115,17 +115,20 @@ export function GameLobby({ user, onJoinGame, onSignOut, energySystem, boardSyst
   };
 
   // Get available board themes based on player level
-  const getAvailableThemes = () => {
+const getAvailableThemes = () => {
     const playerLevel = playerProfile?.level || 1;
     return Object.values(BOARD_THEMES).filter(theme => 
-      playerLevel >= theme.unlockLevel
+        !theme.unlockLevel || playerLevel >= theme.unlockLevel
     );
-  };
+};
 
   // Get theme display info
-  const getThemeInfo = (themeId) => {
-    return BOARD_THEMES[themeId.toUpperCase()] || BOARD_THEMES.JUNGLE_ADVENTURE;
-  };
+const getThemeInfo = (themeId) => {
+    const matchingTheme = Object.values(BOARD_THEMES).find(
+        theme => theme.id === themeId || theme.id === themeId?.toLowerCase()
+    );
+    return matchingTheme || BOARD_THEMES.CLASSIC_PLAINS;
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-indigo-900 to-purple-900 p-4">

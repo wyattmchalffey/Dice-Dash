@@ -376,3 +376,5 @@ export class BoardManager {
         return gameInstance?.gameState || 'not_found';
     }
 }
+
+export { BOARD_THEMES } from './board-system';

@@ -312,6 +312,62 @@ export function GameBoard({
     const userStats = getPlayerStats(user?.uid);
     const isUserTurn = currentPlayer?.userId === user?.uid;
 
+    useEffect(() => {
+        if (!initialGame?.id) return;
+
+        // Subscribe to real-time game updates
+        const unsubscribe = gameService.subscribeToGame(initialGame.id, (updatedGame) => {
+            if (updatedGame) {
+                setGame(updatedGame);
+
+                // Update current player if exists
+                if (updatedGame.players && user) {
+                    const playerData = updatedGame.players.find(p => p.userId === user.uid);
+                    setCurrentPlayer(playerData);
+                }
+            }
+        });
+
+        return () => unsubscribe();
+    }, [initialGame?.id, user]);
+
+    // Also add this to ensure board is initialized:
+    useEffect(() => {
+        if (game && boardManager && !board) {
+            try {
+                // Initialize board with theme from game data
+                const theme = game.theme || game.boardId || 'classic_plains';
+                const playerCount = game.players?.length || 4;
+
+                boardManager.createBoard(game.id, theme, playerCount);
+                const createdBoard = boardManager.getBoard(game.id);
+                setBoard(createdBoard);
+
+                // Add players to board manager
+                if (game.players && Array.isArray(game.players)) {
+                    game.players.forEach(player => {
+                        boardManager.addPlayer(game.id, {
+                            userId: player.userId,
+                            displayName: player.name || player.displayName,
+                            ...player
+                        });
+                    });
+                }
+
+                // Set game instance
+                const instance = boardManager.getGameInstance(game.id);
+                setGameInstance(instance);
+
+                // Get initial stats
+                const stats = boardManager.getGameStats(game.id);
+                setGameStats(stats);
+            } catch (error) {
+                console.error('Failed to initialize board:', error);
+                setError('Failed to initialize game board');
+            }
+        }
+    }, [game, boardManager, board]);
+
     if (loading && !board) {
         return (
             <div className="flex items-center justify-center h-full">
@@ -615,3 +671,5 @@ export function GameBoard({
         </div>
     );
 }
+
+export default GameBoard;

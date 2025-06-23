@@ -315,12 +315,15 @@ const BoardRenderer = ({
 
     // Draw players on spaces
     const drawPlayers = (ctx, visibleSpaces, spaceSize, canvasWidth, canvasHeight) => {
-        if (!boardManager || !game?.players) return;
+        if (!boardManager || !game || !game.players) return;
+
+        // Ensure game.players is an array
+        const playersArray = Array.isArray(game.players) ? game.players : [];
 
         // Group players by space
         const playersOnSpaces = new Map();
-        
-        game.players.forEach(player => {
+
+        playersArray.forEach(player => {
             const position = boardManager.getPlayerPosition(player.userId);
             if (position !== undefined) {
                 if (!playersOnSpaces.has(position)) {
@@ -339,9 +342,10 @@ const BoardRenderer = ({
             const spaceY = (space.y - viewCenter.y) * spaceSize + canvasHeight / 2;
 
             players.forEach((player, index) => {
-                const playerIndex = game.players.findIndex(p => p.userId === player.userId);
-                const color = PLAYER_COLORS[playerIndex % PLAYER_COLORS.length];
-                
+                // Find player index safely
+                const playerIndex = playersArray.findIndex(p => p.userId === player.userId);
+                const color = PLAYER_COLORS[playerIndex >= 0 ? playerIndex % PLAYER_COLORS.length : 0];
+
                 // Arrange multiple players around the space
                 const angle = (index / players.length) * 2 * Math.PI;
                 const radius = players.length > 1 ? spaceSize * 0.3 : 0;
@@ -353,7 +357,7 @@ const BoardRenderer = ({
                 ctx.fillStyle = color;
                 ctx.strokeStyle = '#ffffff';
                 ctx.lineWidth = 2;
-                
+
                 ctx.beginPath();
                 ctx.arc(x, y, PLAYER_SIZE * zoom * 0.4, 0, 2 * Math.PI);
                 ctx.fill();
@@ -367,10 +371,10 @@ const BoardRenderer = ({
                     ctx.font = `${Math.max(10, PLAYER_SIZE * zoom * 0.5)}px Arial`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'top';
-                    
-                    const name = player.displayName || `Player ${playerIndex + 1}`;
+
+                    const name = player.name || player.displayName || `Player ${playerIndex + 1}`;
                     const shortName = name.length > 8 ? name.substring(0, 8) + '...' : name;
-                    
+
                     ctx.strokeText(shortName, x, y + PLAYER_SIZE * zoom * 0.5);
                     ctx.fillText(shortName, x, y + PLAYER_SIZE * zoom * 0.5);
                 }

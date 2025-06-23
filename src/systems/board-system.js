@@ -66,7 +66,7 @@ export const SPACE_TYPES = {
     }
 };
 
-// Standard Mario Party-style board themes
+// Board themes
 export const BOARD_THEMES = {
     CLASSIC_PLAINS: {
         id: 'classic_plains',
@@ -75,12 +75,13 @@ export const BOARD_THEMES = {
         backgroundColor: '#86efac',
         pathColor: '#fbbf24',
         decorativeColor: '#16a34a',
-        boardSize: { width: 80, height: 60 }, // Much smaller, standard size
+        boardSize: { width: 80, height: 60 },
         pathStyle: 'classic_path',
         specialFeatures: ['coin_blocks', 'pipe_warps'],
         ambientEffects: ['floating_clouds', 'grass_sway'],
         backgroundPattern: 'grass_texture',
-        lighting: 'sunny_day'
+        lighting: 'sunny_day',
+        unlockLevel: 1  // Add this
     },
     CRYSTAL_CAVE: {
         id: 'crystal_cave',
@@ -94,7 +95,8 @@ export const BOARD_THEMES = {
         specialFeatures: ['crystal_formations', 'glowing_pools'],
         ambientEffects: ['crystal_sparkles', 'echo_sounds'],
         backgroundPattern: 'rock_texture',
-        lighting: 'crystal_glow'
+        lighting: 'crystal_glow',
+        unlockLevel: 5  // Add this
     },
     BEACH_RESORT: {
         id: 'beach_resort',
@@ -108,7 +110,8 @@ export const BOARD_THEMES = {
         specialFeatures: ['palm_trees', 'beach_umbrellas'],
         ambientEffects: ['wave_sounds', 'seagull_calls'],
         backgroundPattern: 'sand_texture',
-        lighting: 'tropical_sun'
+        lighting: 'tropical_sun',
+        unlockLevel: 10  // Add this
     }
 };
 
