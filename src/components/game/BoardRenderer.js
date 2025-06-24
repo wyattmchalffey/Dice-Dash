@@ -185,7 +185,7 @@ const BoardRenderer = ({
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = SPACE_BORDER_WIDTH;
         
-        this.roundRect(ctx, x - size/2, y - size/2, size, size, radius);
+        roundRect(ctx, x - size/2, y - size/2, size, size, radius);
         ctx.fill();
         
         // Reset shadow for border
@@ -199,7 +199,7 @@ const BoardRenderer = ({
         highlightGradient.addColorStop(0, '#ffffff');
         highlightGradient.addColorStop(1, 'transparent');
         ctx.fillStyle = highlightGradient;
-        this.roundRect(ctx, x - size/2 + 2, y - size/2 + 2, size - 4, size/2, radius);
+        roundRect(ctx, x - size/2 + 2, y - size/2 + 2, size - 4, size/2, radius);
         ctx.fill();
         ctx.restore();
 
@@ -229,7 +229,7 @@ const BoardRenderer = ({
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 4;
             ctx.globalAlpha = 0.5;
-            this.roundRect(ctx, x - size/2 - 4, y - size/2 - 4, size + 8, size + 8, radius);
+            roundRect(ctx, x - size/2 - 4, y - size/2 - 4, size + 8, size + 8, radius);
             ctx.stroke();
         }
 
@@ -237,7 +237,7 @@ const BoardRenderer = ({
     }, [viewCenter, zoom, validMoves, hoveredSpace]);
 
     // Helper function for rounded rectangles
-    const roundRect = function(ctx, x, y, width, height, radius) {
+    const roundRect = (ctx, x, y, width, height, radius) => {
         ctx.beginPath();
         ctx.moveTo(x + radius, y);
         ctx.lineTo(x + width - radius, y);

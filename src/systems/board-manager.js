@@ -67,6 +67,55 @@ export class BoardManager {
         return board;
     }
 
+    // Get current player
+    getCurrentPlayer(gameId) {
+        const gameInstance = this.gameInstances.get(gameId);
+        if (!gameInstance || gameInstance.turnOrder.length === 0) {
+            return null;
+        }
+
+        const currentUserId = gameInstance.turnOrder[gameInstance.currentTurn];
+        return gameInstance.players.get(currentUserId) || null;
+    }
+
+    // Get next player in turn order
+    getNextPlayer(gameId) {
+        const gameInstance = this.gameInstances.get(gameId);
+        if (!gameInstance || gameInstance.turnOrder.length === 0) {
+            return null;
+        }
+
+        const nextTurn = (gameInstance.currentTurn + 1) % gameInstance.turnOrder.length;
+        const nextUserId = gameInstance.turnOrder[nextTurn];
+        return gameInstance.players.get(nextUserId) || null;
+    }
+
+    // Advance to next turn
+    advanceTurn(gameId) {
+        const gameInstance = this.gameInstances.get(gameId);
+        if (!gameInstance) return false;
+
+        gameInstance.currentTurn = (gameInstance.currentTurn + 1) % gameInstance.turnOrder.length;
+
+        // Add to game history
+        const stats = this.gameStats.get(gameId);
+        if (stats && stats.gameHistory) {
+            stats.gameHistory.push({
+                event: 'turn_advanced',
+                turn: gameInstance.currentTurn,
+                timestamp: Date.now()
+            });
+        }
+
+        return true;
+    }
+
+    // Check if it's a specific player's turn
+    isPlayerTurn(gameId, userId) {
+        const currentPlayer = this.getCurrentPlayer(gameId);
+        return currentPlayer && currentPlayer.userId === userId;
+    }
+
     // Get board for a game
     getBoard(gameId) {
         return this.boards.get(gameId);

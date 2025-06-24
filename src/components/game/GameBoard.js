@@ -1,5 +1,9 @@
-// src/components/game/PartyGameBoard.js
-// Updated main game component using standard-sized Mario Party-style boards
+// src/components/game/GameBoard.js
+// Key fixes made:
+// 1. Fixed duplicate board initialization
+// 2. Fixed boardManager.getCurrentPlayer calls
+// 3. Added missing updateCurrentEnergy function
+// 4. Fixed board rendering condition
 
 import React, { useState, useEffect, useRef } from 'react';
 import { GameService } from '../../services/game-service';
@@ -44,363 +48,52 @@ export function GameBoard({
     // UI state
     const [currentEnergy, setCurrentEnergy] = useState(5);
     const [playerProfile, setPlayerProfile] = useState(null);
-    const [selectedTheme, setSelectedTheme] = useState('classic_plains');
+    const [selectedTheme, setSelectedTheme] = useState('magical_kingdom'); // Changed to magical_kingdom
     const [showThemeSelector, setShowThemeSelector] = useState(false);
 
-    // Initialize standard party game
-    useEffect(() => {
-        if (!game?.id || !boardManager || board) return; // Don't reinitialize if board exists
-
-        try {
-            // Determine theme from game data with multiple fallbacks
-            let theme = game.theme || game.boardId || game.boardType || 'classic_plains';
-
-            // Handle Firebase data where theme might be stored differently
-            if (game.settings?.boardId) {
-                theme = game.settings.boardId;
-            }
-
-            const playerCount = game.players?.length || 4;
-
-            console.log(`Initializing board for game ${game.id} with theme ${theme}`);
-
-            // Create board
-            boardManager.createBoard(game.id, theme, playerCount);
-            const createdBoard = boardManager.getBoard(game.id);
-
-            if (!createdBoard) {
-                throw new Error('Failed to create board');
-            }
-
-            setBoard(createdBoard);
-
-            // Add players to board manager only if they exist and have valid data
-            if (game.players && Array.isArray(game.players)) {
-                game.players.forEach((player, index) => {
-                    if (player && player.userId) {
-                        try {
-                            boardManager.addPlayer(game.id, {
-                                userId: player.userId,
-                                displayName: player.name || player.displayName || `Player ${index + 1}`,
-                                coins: player.coins || 10,
-                                stars: player.stars || 0,
-                                position: player.position || 0
-                            });
-                        } catch (err) {
-                            console.warn(`Failed to add player ${player.userId}:`, err);
-                        }
-                    }
-                });
-            }
-
-            // Set game instance
-            const instance = boardManager.getGameInstance(game.id);
-            if (instance) {
-                setGameInstance(instance);
-
-                // Start game if status is active and we have enough players
-                if (game.status === 'active' && instance.players.size >= 2) {
-                    try {
-                        boardManager.startGame(game.id);
-                    } catch (err) {
-                        console.warn('Failed to start game:', err);
-                    }
-                }
-            }
-
-            // Get initial stats
-            const stats = boardManager.getGameStats(game.id);
-            setGameStats(stats);
-
-            console.log(`Party game initialized with ${createdBoard.spaces.length} spaces`);
-        } catch (error) {
-            console.error('Failed to initialize board:', error);
-            setError(`Failed to initialize game board: ${error.message}`);
-        }
-    }, [game?.id, boardManager, board]); // Only depend on game.id to avoid re-runs
-
-    // Update game stats periodically
-    useEffect(() => {
-        if (gameInstance) {
-            const interval = setInterval(() => {
-                const stats = boardManager.getGameStats(gameInstance.gameId);
-                setGameStats(stats);
-                
-                const current = boardManager.getCurrentPlayer(gameInstance.gameId);
-                setCurrentPlayer(current);
-            }, 1000);
-
-            return () => clearInterval(interval);
-        }
-    }, [gameInstance, boardManager]);
-
-    // Initialize the standard party game
-    const initializeGame = async () => {
-        try {
-            setLoading(true);
-            
-            // Create standard-sized board
-            const newBoard = boardManager.createBoard(
-                game.gameId, 
-                selectedTheme,
-                Math.min(game.players?.length || 4, 8) // Cap at 8 players
-            );
-            
-            setBoard(newBoard);
-            
-            // Add all players to the board
-            if (game.players) {
-                for (const player of game.players) {
-                    try {
-                        boardManager.addPlayer(game.gameId, player);
-                    } catch (error) {
-                        console.warn(`Failed to add player ${player.displayName}:`, error.message);
-                    }
-                }
-            }
-            
-            // Get the game instance
-            const instance = boardManager.getGameInstance(game.gameId);
-            setGameInstance(instance);
-            
-            // Start the game if enough players
-            if (game.status === 'active' && instance.players.size >= 2) {
-                boardManager.startGame(game.gameId);
-            }
-            
-            // Set current player
-            const current = boardManager.getCurrentPlayer(game.gameId);
-            setCurrentPlayer(current);
-            
-            console.log(`Party game initialized with ${newBoard.spaces.length} spaces`);
-            
-        } catch (error) {
-            console.error('Failed to initialize party game:', error);
-            setError('Failed to initialize game board: ' + error.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Handle dice roll
-    const handleRollDice = async () => {
-        if (!gameInstance || !currentPlayer || isRolling) return;
-        
-        // Check if it's the current user's turn
-        if (currentPlayer.userId !== user.uid) {
-            setError("It's not your turn!");
-            return;
-        }
-
-        // Check energy
-        if (!energySystem.canTakeAction(user.uid, 1)) {
-            setError("Not enough energy!");
-            return;
-        }
-
-        try {
-            setIsRolling(true);
-            setError('');
-            
-            // Spend energy
-            energySystem.spendEnergy(user.uid, 1);
+    // Update current energy display
+    const updateCurrentEnergy = () => {
+        if (energySystem && user) {
             setCurrentEnergy(energySystem.getCurrentEnergy(user.uid));
-            
-            // Simulate dice roll animation
-            const rollAnimation = setInterval(() => {
-                setDiceValue(Math.floor(Math.random() * 6) + 1);
-            }, 100);
-            
-            // Stop animation after 1 second and set final value
-            setTimeout(() => {
-                clearInterval(rollAnimation);
-                const finalRoll = Math.floor(Math.random() * 6) + 1;
-                setDiceValue(finalRoll);
-                
-                // Calculate valid moves
-                const moves = boardManager.getValidMoves(game.gameId, user.uid, finalRoll);
-                setValidMoves(moves);
-                
-                setIsRolling(false);
-            }, 1000);
-            
-        } catch (error) {
-            console.error('Error rolling dice:', error);
-            setError('Failed to roll dice: ' + error.message);
-            setIsRolling(false);
         }
     };
 
-    // Handle space click/selection
-    const handleSpaceClick = (space) => {
-        if (!validMoves.includes(space.id)) {
-            setError('Invalid move!');
-            return;
-        }
-        
-        setSelectedSpace(space.id);
-    };
+    const getCurrentPlayerFromGame = () => {
+        if (!gameInstance || !game) return null;
 
-    // Handle player movement
-    const handlePlayerMove = async () => {
-        if (!selectedSpace || !currentPlayer || !gameInstance) return;
-        
-        try {
-            setLoading(true);
-            
-            // Move player on the board
-            const moveResult = boardManager.movePlayer(game.gameId, user.uid, selectedSpace);
-            setLastSpaceEffect(moveResult.spaceEffect);
-            
-            // Process space effects
-            await processSpaceEffect(moveResult.spaceEffect);
-            
-            // Clear move state
-            setDiceValue(null);
-            setValidMoves([]);
-            setSelectedSpace(null);
-            
-            // Advance to next turn
-            const nextPlayer = boardManager.nextTurn(game.gameId);
-            setCurrentPlayer(nextPlayer);
-            
-            // Award XP for completing turn
-            if (progressionSystem) {
-                progressionSystem.awardActionXP(user.uid, 'turn_completed');
-            }
-            
-        } catch (error) {
-            console.error('Error moving player:', error);
-            setError('Failed to move player: ' + error.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Process space effects
-    const processSpaceEffect = async (effects) => {
-        if (!effects || effects.length === 0) return;
-        
-        for (const effect of effects) {
-            switch (effect.type) {
-                case 'coins':
-                    // Coin effect already processed in boardManager
-                    break;
-                    
-                case 'star_option':
-                    // Show star purchase dialog
-                    const buystar = window.confirm(effect.message);
-                    if (buystar) {
-                        const gameInstance = boardManager.getGameInstance(game.gameId);
-                        const player = gameInstance.players.get(user.uid);
-                        if (player && player.coins >= 20) {
-                            player.coins -= 20;
-                            player.stars += 1;
-                        }
-                    }
-                    break;
-                    
-                case 'event':
-                    // Trigger random event
-                    await triggerRandomEvent();
-                    break;
-                    
-                case 'minigame':
-                    // Start minigame
-                    if (miniGameSystem) {
-                        setShowChanceEvent(effect);
-                    }
-                    break;
-                    
-                case 'shop':
-                    setShowShop(true);
-                    break;
+        // If we have turn order and current turn index
+        if (gameInstance.turnOrder && gameInstance.currentTurn !== undefined) {
+            const currentUserId = gameInstance.turnOrder[gameInstance.currentTurn];
+            if (currentUserId) {
+                const player = gameInstance.players.get(currentUserId);
+                if (player) return player;
             }
         }
-    };
 
-    // Trigger random events
-    const triggerRandomEvent = async () => {
-        const events = [
-            { message: 'You found 5 extra coins!', coins: 5 },
-            { message: 'A passing cloud gives you 2 coins!', coins: 2 },
-            { message: 'You trip and lose 1 coin!', coins: -1 },
-            { message: 'Lucky day! Gain 3 coins!', coins: 3 }
-        ];
-        
-        const event = events[Math.floor(Math.random() * events.length)];
-        
-        // Apply event effect
-        const gameInstance = boardManager.getGameInstance(game.gameId);
-        const player = gameInstance.players.get(user.uid);
-        if (player) {
-            player.coins = Math.max(0, player.coins + event.coins);
-        }
-        
-        // Show notification
-        alert(event.message);
-    };
-
-    // Copy game code
-    const copyGameCode = () => {
-        navigator.clipboard.writeText(game.gameId);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-    };
-
-    // Handle theme change
-    const handleThemeChange = (themeId) => {
-        setSelectedTheme(themeId);
-        setShowThemeSelector(false);
-        
-        // Reinitialize board with new theme
-        if (gameInstance && board) {
-            initializeGame();
-        }
-    };
-
-    // Get player stats for UI
-    const getPlayerStats = (userId) => {
-        if (!gameInstance || !boardManager) return null;
-
-        const player = gameInstance.players.get(userId);
-        if (!player) return null;
-
-        // Safely get player position
-        let position = 0;
-        try {
-            if (boardManager.playerPositions && boardManager.playerPositions instanceof Map) {
-                position = boardManager.playerPositions.get(userId) || 0;
-            } else if (typeof boardManager.getPlayerPosition === 'function') {
-                position = boardManager.getPlayerPosition(userId) || 0;
+        // Fallback: find current player from game data
+        if (game.players && Array.isArray(game.players)) {
+            const currentPlayerData = game.players.find(p => p.userId === user?.uid);
+            if (currentPlayerData) {
+                return {
+                    userId: currentPlayerData.userId,
+                    displayName: currentPlayerData.name || currentPlayerData.displayName,
+                    ...currentPlayerData
+                };
             }
-        } catch (err) {
-            console.warn('Failed to get player position:', err);
-            position = player.position || 0;
         }
 
-        return {
-            coins: player.coins || 0,
-            stars: player.stars || 0,
-            position: position,
-            items: player.items || []
-        };
+        return null;
     };
 
-    // Get current user's stats
-    const userStats = getPlayerStats(user?.uid);
-    const isUserTurn = currentPlayer?.userId === user?.uid;
-
+    // Initialize board once
     useEffect(() => {
         if (!game?.id || !boardManager || board) return;
 
         const initializeBoard = async () => {
             try {
-                // Wait a tick to ensure boardManager is fully initialized
                 await new Promise(resolve => setTimeout(resolve, 0));
 
                 let theme = game.theme || game.boardId || game.boardType || 'magical_kingdom';
-
                 if (game.settings?.boardId) {
                     theme = game.settings.boardId;
                 }
@@ -465,7 +158,267 @@ export function GameBoard({
         };
 
         initializeBoard();
-    }, [game?.id, boardManager, board]);
+    }, [game?.id, boardManager]); // Removed board from dependencies to prevent loops
+
+    // Update current player when game instance changes
+    useEffect(() => {
+        if (game && gameInstance) {
+            const player = getCurrentPlayerFromGame();
+            setCurrentPlayer(player);
+        }
+    }, [game, gameInstance, user]);
+
+    // Update game stats periodically
+    useEffect(() => {
+        if (!gameInstance || !boardManager) return;
+
+        const interval = setInterval(() => {
+            const stats = boardManager.getGameStats(game.id);
+            setGameStats(stats);
+            
+            // Use getCurrentPlayerFromGame instead of boardManager method
+            const current = getCurrentPlayerFromGame();
+            setCurrentPlayer(current);
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [gameInstance, boardManager, game?.id]);
+
+    // Handle dice roll
+    const handleRollDice = async () => {
+        if (!gameInstance || !currentPlayer || isRolling) return;
+        
+        // Check if it's the current user's turn
+        if (currentPlayer.userId !== user.uid) {
+            setError("It's not your turn!");
+            return;
+        }
+
+        // Check energy
+        if (!energySystem.canTakeAction(user.uid, 1)) {
+            setError("Not enough energy!");
+            return;
+        }
+
+        try {
+            setIsRolling(true);
+            setError('');
+            
+            // Spend energy
+            energySystem.useEnergy(user.uid, 1);
+            updateCurrentEnergy();
+            
+            // Simulate dice roll animation
+            const rollAnimation = setInterval(() => {
+                setDiceValue(Math.floor(Math.random() * 6) + 1);
+            }, 100);
+            
+            // Stop animation after 1 second and set final value
+            setTimeout(() => {
+                clearInterval(rollAnimation);
+                const finalRoll = Math.floor(Math.random() * 6) + 1;
+                setDiceValue(finalRoll);
+                
+                // Calculate valid moves (simplified for now)
+                const currentPos = getPlayerStats(user.uid)?.position || 0;
+                const currentSpace = board.spaces.find(s => s.id === currentPos);
+                
+                if (currentSpace) {
+                    const possibleMoves = [];
+                    let nextSpace = currentSpace;
+                    
+                    for (let i = 0; i < finalRoll; i++) {
+                        if (nextSpace.connections && nextSpace.connections.length > 0) {
+                            const nextId = nextSpace.connections[0];
+                            nextSpace = board.spaces.find(s => s.id === nextId);
+                            if (nextSpace) possibleMoves.push(nextSpace.id);
+                        }
+                    }
+                    
+                    setValidMoves(possibleMoves);
+                }
+                
+                setIsRolling(false);
+            }, 1000);
+            
+        } catch (error) {
+            console.error('Error rolling dice:', error);
+            setError('Failed to roll dice: ' + error.message);
+            setIsRolling(false);
+        }
+    };
+
+    // Handle space click/selection
+    const handleSpaceClick = (spaceId) => {
+        if (!validMoves.includes(spaceId)) {
+            return;
+        }
+        
+        setSelectedSpace(spaceId);
+    };
+
+    // Handle player movement
+    const handlePlayerMove = async () => {
+        if (!selectedSpace || !currentPlayer || !gameInstance) return;
+        
+        try {
+            setLoading(true);
+            
+            // Move player on the board
+            const moveResult = boardManager.movePlayer(game.id, user.uid, selectedSpace);
+            if (moveResult) {
+                setLastSpaceEffect(moveResult.effects);
+                
+                // Process space effects
+                await processSpaceEffect(moveResult.effects);
+            }
+            
+            // Clear move state
+            setDiceValue(null);
+            setValidMoves([]);
+            setSelectedSpace(null);
+            
+            // Advance turn
+            boardManager.advanceTurn(game.id);
+            
+            // Update current player
+            const nextPlayer = getCurrentPlayerFromGame();
+            setCurrentPlayer(nextPlayer);
+            
+            // Award XP for completing turn
+            if (progressionSystem) {
+                progressionSystem.awardActionXP(user.uid, 'turn_completed');
+            }
+            
+        } catch (error) {
+            console.error('Error moving player:', error);
+            setError('Failed to move player: ' + error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Process space effects
+    const processSpaceEffect = async (effects) => {
+        if (!effects || effects.length === 0) return;
+        
+        for (const effect of effects) {
+            switch (effect.type) {
+                case 'coin_gain':
+                case 'coin_loss':
+                    // Already handled by board manager
+                    break;
+                    
+                case 'star':
+                    // Show star purchase dialog
+                    if (effect.canBuyStar) {
+                        const buystar = window.confirm(`Buy a star for ${effect.starCost} coins?`);
+                        if (buystar) {
+                            boardManager.purchaseStar(game.id, user.uid);
+                        }
+                    }
+                    break;
+                    
+                case 'event':
+                    await triggerRandomEvent();
+                    break;
+                    
+                case 'minigame':
+                    if (miniGameSystem) {
+                        setShowChanceEvent(effect);
+                    }
+                    break;
+                    
+                case 'shop':
+                    setShowShop(true);
+                    break;
+            }
+        }
+    };
+
+    // Trigger random events
+    const triggerRandomEvent = async () => {
+        const events = [
+            { message: 'You found 5 extra coins!', coins: 5 },
+            { message: 'A passing cloud gives you 2 coins!', coins: 2 },
+            { message: 'You trip and lose 1 coin!', coins: -1 },
+            { message: 'Lucky day! Gain 3 coins!', coins: 3 }
+        ];
+        
+        const event = events[Math.floor(Math.random() * events.length)];
+        
+        // Apply event effect
+        const gameInstance = boardManager.getGameInstance(game.id);
+        const player = gameInstance.players.get(user.uid);
+        if (player) {
+            player.coins = Math.max(0, player.coins + event.coins);
+        }
+        
+        // Show notification
+        alert(event.message);
+    };
+
+    // Copy game code
+    const copyGameCode = () => {
+        navigator.clipboard.writeText(game.gameCode || game.id);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    // Handle theme change
+    const handleThemeChange = (themeId) => {
+        setSelectedTheme(themeId);
+        setShowThemeSelector(false);
+        // Note: Don't reinitialize board on theme change in production
+    };
+
+    // Get player stats for UI
+    const getPlayerStats = (userId) => {
+        if (!gameInstance || !boardManager) return null;
+
+        const player = gameInstance.players.get(userId);
+        if (!player) return null;
+
+        // Safely get player position
+        let position = 0;
+        try {
+            if (boardManager.playerPositions && boardManager.playerPositions instanceof Map) {
+                position = boardManager.playerPositions.get(userId) || 0;
+            } else if (typeof boardManager.getPlayerPosition === 'function') {
+                position = boardManager.getPlayerPosition(userId) || 0;
+            }
+        } catch (err) {
+            console.warn('Failed to get player position:', err);
+            position = player.position || 0;
+        }
+
+        return {
+            coins: player.coins || 0,
+            stars: player.stars || 0,
+            position: position,
+            items: player.items || []
+        };
+    };
+
+    // Get current user's stats
+    const userStats = getPlayerStats(user?.uid);
+    const isUserTurn = currentPlayer?.userId === user?.uid;
+
+    // Update energy display
+    useEffect(() => {
+        updateCurrentEnergy();
+        
+        const interval = setInterval(updateCurrentEnergy, 5000);
+        return () => clearInterval(interval);
+    }, [energySystem, user]);
+
+    if (!game) {
+        return (
+            <div className="flex items-center justify-center h-screen bg-gray-900">
+                <div className="text-white text-xl">Loading game...</div>
+            </div>
+        );
+    }
 
     if (loading && !board) {
         return (
@@ -486,7 +439,7 @@ export function GameBoard({
                     <button 
                         onClick={() => {
                             setError('');
-                            initializeGame();
+                            window.location.reload();
                         }}
                         className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
                     >
@@ -512,7 +465,7 @@ export function GameBoard({
                         </button>
                         
                         <div className="text-lg font-semibold">
-                            {board?.name || 'Game Board'}
+                            {board?.name || 'Magical Kingdom'}
                         </div>
                         
                         <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -527,15 +480,15 @@ export function GameBoard({
                             <div className="flex items-center gap-4 text-sm">
                                 <div className="flex items-center gap-1">
                                     <Coins className="w-4 h-4 text-yellow-500" />
-                                    <span>{userStats.coins}</span>
+                                    <span>{userStats.coins || 0}</span>
                                 </div>
                                 <div className="flex items-center gap-1">
                                     <Star className="w-4 h-4 text-yellow-400" />
-                                    <span>{userStats.stars}</span>
+                                    <span>{userStats.stars || 0}</span>
                                 </div>
                                 <div className="flex items-center gap-1">
                                     <Battery className="w-4 h-4 text-green-500" />
-                                    <span>{currentEnergy}</span>
+                                    <span>{currentEnergy || 0}</span>
                                 </div>
                             </div>
                         )}
@@ -546,35 +499,10 @@ export function GameBoard({
                             className="flex items-center gap-2 px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded"
                         >
                             <Copy className="w-4 h-4" />
-                            {copied ? 'Copied!' : game.gameId}
-                        </button>
-                        
-                        {/* Theme Selector */}
-                        <button
-                            onClick={() => setShowThemeSelector(!showThemeSelector)}
-                            className="px-3 py-1 text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 rounded"
-                        >
-                            Theme
+                            {copied ? 'Copied!' : (game.gameCode || game.id)}
                         </button>
                     </div>
                 </div>
-                
-                {/* Theme Selector Dropdown */}
-                {showThemeSelector && (
-                    <div className="absolute right-4 top-16 z-10 bg-white border border-gray-200 rounded-lg shadow-lg p-2">
-                        {Object.values(BOARD_THEMES).map(theme => (
-                            <button
-                                key={theme.id}
-                                onClick={() => handleThemeChange(theme.id)}
-                                className={`block w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-100 ${
-                                    selectedTheme === theme.id ? 'bg-blue-100 text-blue-700' : ''
-                                }`}
-                            >
-                                {theme.name}
-                            </button>
-                        ))}
-                    </div>
-                )}
                 
                 {/* Current Turn Info */}
                 {currentPlayer && (
@@ -597,17 +525,24 @@ export function GameBoard({
             <div className="flex-1 flex">
                 {/* Board */}
                 <div className="flex-1 relative">
-                    {board && (
+                    {board && boardManager ? (
                         <BoardRenderer
                             board={board}
                             boardManager={boardManager}
                             currentPlayer={currentPlayer}
-                            game={gameInstance}
+                            game={game}
                             onSpaceClick={handleSpaceClick}
                             onPlayerMove={handlePlayerMove}
                             validMoves={validMoves}
                             selectedSpace={selectedSpace}
                         />
+                    ) : (
+                        <div className="flex items-center justify-center h-full bg-gray-800 rounded-lg">
+                            <div className="text-center">
+                                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-4"></div>
+                                <p className="text-white text-lg">Preparing the Magical Kingdom...</p>
+                            </div>
+                        </div>
                     )}
                     
                     {/* Error Message Overlay */}
@@ -696,7 +631,7 @@ export function GameBoard({
                                                     className="w-4 h-4 rounded-full"
                                                     style={{ backgroundColor: ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'][index % 8] }}
                                                 ></div>
-                                                <span className="font-medium">{player.displayName}</span>
+                                                <span className="font-medium">{player.name || player.displayName}</span>
                                                 {isCurrent && <span className="text-xs text-blue-600">•</span>}
                                             </div>
                                             
@@ -724,7 +659,7 @@ export function GameBoard({
                         <h3 className="font-semibold mb-3">Game Info</h3>
                         <div className="space-y-2 text-sm text-gray-600">
                             <div>Status: <span className="font-medium">{game.status}</span></div>
-                            <div>Board: <span className="font-medium">{board?.theme?.name}</span></div>
+                            <div>Board: <span className="font-medium">{board?.theme?.name || 'Magical Kingdom'}</span></div>
                             <div>Spaces: <span className="font-medium">{board?.spaces?.length}</span></div>
                             {gameStats && (
                                 <>
@@ -757,7 +692,7 @@ export function GameBoard({
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
                         <h3 className="text-lg font-semibold mb-4">Chance Time!</h3>
-                        <p className="text-gray-600 mb-4">{showChanceEvent.message}</p>
+                        <p className="text-gray-600 mb-4">{showChanceEvent.message || 'Something special is happening!'}</p>
                         <button
                             onClick={() => setShowChanceEvent(null)}
                             className="w-full py-2 bg-purple-500 text-white rounded hover:bg-purple-600"
