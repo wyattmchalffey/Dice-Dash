@@ -147,44 +147,31 @@ export class BoardGenerator {
         this.spaceTypes = Object.values(SPACE_TYPES);
     }
 
-    // Generate the magical kingdom board
+    // --- REWORKED: Main function to generate the new board layout ---
     generateBoard(playerCount = 4) {
-        console.log(`Generating Magical Kingdom board for ${playerCount} players`);
+        console.log(`Generating Mario Party-style Magical Kingdom board for ${playerCount} players`);
 
         const { width, height } = this.theme.boardSize;
-        const spaces = [];
-        const starLocations = [];
-        const landmarks = [];
-        const specialEffects = [];
+        let spaces = [];
 
-        // Create main circular path with interesting shape
-        const mainPath = this.generateMagicalPath(width, height);
-        spaces.push(...mainPath);
+        // Step 1: Create the main looping path and identify junction points
+        const { mainPath, junctions } = this.generateMainPath(width, height);
 
-        // Add branching paths to create more interesting gameplay
-        const branches = this.generateBranchPaths(width, height, mainPath.length);
-        spaces.push(...branches);
+        // Step 2: Create the branching path that connects the junctions
+        const branchPath = this.generateBranchPath(mainPath, junctions);
 
-        // Add secret passages
-        const secrets = this.generateSecretPaths(width, height, spaces.length);
-        spaces.push(...secrets);
+        // Combine all spaces into one array
+        spaces = [...mainPath, ...branchPath];
 
-        // Generate beautiful landmarks
-        const mainLandmarks = this.generateMagicalLandmarks(width, height);
-        landmarks.push(...mainLandmarks);
+        // Step 3: Connect all spaces using the new, structured logic
+        this.connectSpaces(mainPath, branchPath, junctions);
 
-        // Place star locations strategically
-        const stars = this.generateStarLocations(spaces);
-        starLocations.push(...stars);
+        // Step 4: Generate all other board features using the complete set of spaces
+        const starLocations = this.generateStarLocations(spaces);
+        const landmarks = this.generateMagicalLandmarks(width, height);
+        const specialEffects = this.generateSpecialEffects(width, height);
 
-        // Add special visual effects locations
-        const effects = this.generateSpecialEffects(width, height);
-        specialEffects.push(...effects);
-
-        // Connect all spaces
-        this.connectSpaces(spaces);
-
-        console.log(`Generated magical board with ${spaces.length} spaces`);
+        console.log(`Generated board with ${spaces.length} spaces`);
 
         return {
             id: 'magical_kingdom',
@@ -205,162 +192,132 @@ export class BoardGenerator {
         };
     }
 
-    // Generate the main magical path in an interesting shape
-    generateMagicalPath(width, height) {
-        const spaces = [];
+    // --- NEW: Generates a simple, organic oval path and defines junction points ---
+    generateMainPath(width, height) {
+        const mainPath = [];
+        const junctions = {};
+        const numSpaces = 40;
         const centerX = width / 2;
         const centerY = height / 2;
-        const mainPathSpaces = 40; // Main loop size
-        
-        // Create a figure-8 or infinity symbol shape for visual interest
-        for (let i = 0; i < mainPathSpaces; i++) {
-            const angle = (i / mainPathSpaces) * Math.PI * 2;
-            const t = i / mainPathSpaces;
-            
-            // Figure-8 parametric equations with some variation
-            const scale = 18;
-            const x = centerX + scale * Math.sin(angle) * (1 + 0.3 * Math.cos(angle * 2));
-            const y = centerY + scale * 0.6 * Math.sin(angle * 2);
-            
-            // Add some organic variation
-            const xOffset = Math.sin(i * 0.5) * 2;
-            const yOffset = Math.cos(i * 0.7) * 2;
-            
-            const spaceType = this.getSpaceTypeForPosition(i, mainPathSpaces);
-            
-            spaces.push({
+        const radiusX = width * 0.4;
+        const radiusY = height * 0.3;
+
+        for (let i = 0; i < numSpaces; i++) {
+            const angle = (i / numSpaces) * Math.PI * 2;
+            const x = centerX + radiusX * Math.cos(angle) + Math.sin(angle * 3) * 1.5;
+            const y = centerY + radiusY * Math.sin(angle) + Math.cos(angle * 4) * 1.5;
+
+            // Define where the path will split and merge
+            if (i === Math.floor(numSpaces * 0.25)) {
+                junctions.startId = i;
+            }
+            if (i === Math.floor(numSpaces * 0.75)) {
+                junctions.endId = i;
+            }
+
+            const spaceType = this.getSpaceTypeForPosition(i, numSpaces);
+
+            mainPath.push({
                 id: i,
-                x: Math.round(x + xOffset),
-                y: Math.round(y + yOffset),
+                x: Math.round(x),
+                y: Math.round(y),
                 type: spaceType,
                 pathType: 'main',
                 connections: [],
                 pathIndex: i,
-                decorations: this.getSpaceDecorations(spaceType),
-                effects: this.getSpaceEffects(spaceType)
+                isJunction: i === junctions.startId || i === junctions.endId
             });
         }
-        
-        return spaces;
+
+        // Store the actual space objects for easier access later
+        junctions.startSpace = mainPath[junctions.startId];
+        junctions.endSpace = mainPath[junctions.endId];
+
+        return { mainPath, junctions };
     }
 
-    // Generate branching paths for more strategic choices
-    generateBranchPaths(width, height, startId) {
-        const branches = [];
-        const numBranches = 3; // Three branch paths for variety
-        let spaceId = startId;
+    // --- NEW: Generates a single, clean branching path to connect the junctions ---
+    generateBranchPath(mainPath, junctions) {
+        const branchPath = [];
+        const numBranchSpaces = 12;
+        let spaceId = mainPath.length; // Start IDs after the main path
 
-        const branchConfigs = [
-            { start: 8, length: 8, direction: 'upper', theme: 'crystal' },
-            { start: 18, length: 6, direction: 'lower', theme: 'forest' },
-            { start: 30, length: 10, direction: 'outer', theme: 'clouds' }
-        ];
+        const { startSpace, endSpace } = junctions;
 
-        branchConfigs.forEach((config, branchIndex) => {
-            const connectionPoint = config.start;
-            const branchLength = config.length;
-            
-            for (let i = 0; i < branchLength; i++) {
-                const progress = i / (branchLength - 1);
-                let x, y;
-                
-                if (config.direction === 'upper') {
-                    x = width/2 + (i - branchLength/2) * 4;
-                    y = height/2 - 15 - i * 2;
-                } else if (config.direction === 'lower') {
-                    x = width/2 - (i - branchLength/2) * 4;
-                    y = height/2 + 15 + i * 1.5;
-                } else {
-                    const angle = Math.PI * 0.3 * branchIndex;
-                    x = width/2 + Math.cos(angle) * (20 + i * 3);
-                    y = height/2 + Math.sin(angle) * (20 + i * 2);
-                }
-                
-                // Special space types for branches
-                let spaceType = 'BLUE';
-                if (i === branchLength - 1) spaceType = 'STAR';
-                else if (i === Math.floor(branchLength / 2)) spaceType = 'SHOP';
-                else if (Math.random() < 0.3) spaceType = 'CHANCE';
-                else if (Math.random() < 0.5) spaceType = 'GREEN';
-                
-                branches.push({
-                    id: spaceId++,
-                    x: Math.round(x),
-                    y: Math.round(y),
-                    type: spaceType,
-                    pathType: 'branch',
-                    branchId: branchIndex,
-                    branchTheme: config.theme,
-                    connections: [],
-                    pathIndex: i,
-                    connectionPoint: connectionPoint,
-                    decorations: this.getBranchDecorations(config.theme),
-                    effects: this.getBranchEffects(config.theme)
-                });
-            }
-        });
+        // Position the branch loop relative to the junction points (placing it "above")
+        const centerX = (startSpace.x + endSpace.x) / 2;
+        const centerY = (startSpace.y + endSpace.y) / 2 - 15; // Shift upwards
+        const radiusX = Math.abs(startSpace.x - endSpace.x) / 2 + 5;
+        const radiusY = 8;
 
-        return branches;
-    }
+        for (let i = 0; i < numBranchSpaces; i++) {
+            const angle = Math.PI + (i / (numBranchSpaces - 1)) * Math.PI;
+            const x = centerX + radiusX * Math.cos(angle);
+            const y = centerY + radiusY * Math.sin(angle);
 
-    // Generate secret warp paths
-    generateSecretPaths(width, height, startId) {
-        const secrets = [];
-        let spaceId = startId;
-        
-        // Add warp spaces in corners for strategic teleportation
-        const warpLocations = [
-            { x: 10, y: 10, partner: 1 },
-            { x: width - 10, y: 10, partner: 0 },
-            { x: 10, y: height - 10, partner: 3 },
-            { x: width - 10, y: height - 10, partner: 2 }
-        ];
-        
-        warpLocations.forEach((loc, index) => {
-            secrets.push({
+            let spaceType = 'BLUE';
+            if (i === Math.floor(numBranchSpaces / 2)) spaceType = 'STAR';
+            else if (i % 3 === 0) spaceType = 'GREEN';
+
+            branchPath.push({
                 id: spaceId++,
-                x: loc.x,
-                y: loc.y,
-                type: 'WARP',
-                pathType: 'secret',
+                x: Math.round(x),
+                y: Math.round(y),
+                type: spaceType,
+                pathType: 'branch',
                 connections: [],
-                warpPartner: startId + loc.partner,
-                decorations: ['portal_effect', 'swirling_energy'],
-                effects: ['portal_particles', 'dimensional_ripple']
+                pathIndex: i
             });
-        });
-        
-        return secrets;
+        }
+
+        return branchPath;
     }
 
-    // Get space type based on position for balanced distribution
+    // --- NEW: A cleaner, more deliberate way to connect the paths ---
+    connectSpaces(mainPath, branchPath, junctions) {
+        // 1. Connect the main path spaces in a continuous loop
+        for (let i = 0; i < mainPath.length; i++) {
+            const currentSpace = mainPath[i];
+            const nextSpace = mainPath[(i + 1) % mainPath.length];
+            currentSpace.connections.push(nextSpace.id);
+        }
+
+        // 2. Connect the branch path spaces sequentially
+        for (let i = 0; i < branchPath.length - 1; i++) {
+            const currentSpace = branchPath[i];
+            const nextSpace = branchPath[i + 1];
+            currentSpace.connections.push(nextSpace.id);
+        }
+
+        // 3. Create the split path at the starting junction
+        const startJunction = junctions.startSpace;
+        const branchStart = branchPath[0];
+        // The junction now also connects to the start of the branch path
+        startJunction.connections.push(branchStart.id);
+
+        // 4. Create the merge point at the ending junction
+        const endJunction = junctions.endSpace;
+        const branchEnd = branchPath[branchPath.length - 1];
+        // The end of the branch path now connects to the ending junction
+        branchEnd.connections.push(endJunction.id);
+    }
+
+    // --- Helper Functions (Copied from your original class) ---
+
     getSpaceTypeForPosition(position, totalSpaces) {
-        // Start space is always blue
         if (position === 0) return 'BLUE';
-        
-        // Star spaces at strategic positions
-        if (position === Math.floor(totalSpaces * 0.25) || 
-            position === Math.floor(totalSpaces * 0.75)) {
-            return 'STAR';
-        }
-        
-        // Shop spaces at quarter positions
-        if (position === Math.floor(totalSpaces * 0.33) || 
-            position === Math.floor(totalSpaces * 0.66)) {
-            return 'SHOP';
-        }
-        
-        // Distributed space types
+        if (position === Math.floor(totalSpaces * 0.25) || position === Math.floor(totalSpaces * 0.75)) return 'STAR';
+        if (position === Math.floor(totalSpaces * 0.33) || position === Math.floor(totalSpaces * 0.66)) return 'SHOP';
+
         const distribution = Math.random();
-        if (distribution < 0.40) return 'BLUE';      // 40% blue
-        else if (distribution < 0.60) return 'RED';   // 20% red
-        else if (distribution < 0.75) return 'GREEN'; // 15% green
-        else if (distribution < 0.85) return 'HAPPENING'; // 10% mini-game
-        else if (distribution < 0.95) return 'CHANCE';    // 10% chance
-        else return 'BLUE'; // 5% fallback to blue
+        if (distribution < 0.40) return 'BLUE';
+        else if (distribution < 0.60) return 'RED';
+        else if (distribution < 0.75) return 'GREEN';
+        else if (distribution < 0.85) return 'HAPPENING';
+        else if (distribution < 0.95) return 'CHANCE';
+        else return 'BLUE';
     }
 
-    // Get decorations for spaces
     getSpaceDecorations(spaceType) {
         const decorations = {
             'STAR': ['golden_sparkles', 'star_constellation', 'celestial_glow'],
@@ -370,11 +327,9 @@ export class BoardGenerator {
             'GREEN': ['event_banner', 'surprise_box', 'question_marks'],
             'HAPPENING': ['game_controller', 'competition_flag', 'spotlight']
         };
-        
         return decorations[spaceType] || ['basic_decoration'];
     }
 
-    // Get special effects for spaces
     getSpaceEffects(spaceType) {
         const effects = {
             'STAR': { particles: 'golden_dust', animation: 'rotate_slow', glow: true },
@@ -384,118 +339,30 @@ export class BoardGenerator {
             'GREEN': { particles: 'question_bubbles', animation: 'pulse', glow: false },
             'HAPPENING': { particles: 'confetti', animation: 'bounce', glow: true }
         };
-        
         return effects[spaceType] || { particles: 'sparkle', animation: 'none', glow: false };
     }
 
-    // Get decorations for branch themes
-    getBranchDecorations(theme) {
-        const decorations = {
-            'crystal': ['crystal_formations', 'glowing_gems', 'prismatic_light'],
-            'forest': ['enchanted_trees', 'fairy_lights', 'mushroom_circles'],
-            'clouds': ['fluffy_clouds', 'rainbow_wisps', 'floating_platforms']
-        };
-        
-        return decorations[theme] || ['magical_decoration'];
-    }
-
-    // Get effects for branch themes
-    getBranchEffects(theme) {
-        const effects = {
-            'crystal': { ambience: 'crystal_chimes', particles: 'crystal_shards' },
-            'forest': { ambience: 'forest_whispers', particles: 'fireflies' },
-            'clouds': { ambience: 'wind_current', particles: 'cloud_puffs' }
-        };
-        
-        return effects[theme] || { ambience: 'magical_hum', particles: 'sparkles' };
-    }
-
-    // Generate magical landmarks
     generateMagicalLandmarks(width, height) {
         const landmarks = [];
         const centerX = width / 2;
         const centerY = height / 2;
 
-        // Crystal Palace at center
-        landmarks.push({
-            id: 'crystal_palace',
-            x: centerX,
-            y: centerY,
-            type: 'castle',
-            name: 'Crystal Palace',
-            size: 'large',
-            model: 'crystal_palace_3d',
-            animations: ['flag_wave', 'crystal_shimmer', 'window_glow'],
-            interactive: true,
-            description: 'The heart of the Magical Kingdom'
-        });
+        landmarks.push({ id: 'crystal_palace', x: centerX, y: centerY, type: 'castle', name: 'Crystal Palace', size: 'large', model: 'crystal_palace_3d', animations: ['flag_wave', 'crystal_shimmer', 'window_glow'], interactive: true, description: 'The heart of the Magical Kingdom' });
+        landmarks.push({ id: 'wizard_tower', x: centerX - 15, y: centerY - 12, type: 'tower', name: 'Wizard\'s Tower', size: 'medium', model: 'wizard_tower_3d', animations: ['magic_swirl', 'window_light', 'star_orbit'], interactive: true, description: 'Home to ancient magical knowledge' });
+        landmarks.push({ id: 'dream_fountain', x: centerX + 15, y: centerY + 10, type: 'fountain', name: 'Fountain of Dreams', size: 'medium', model: 'magical_fountain_3d', animations: ['water_flow', 'rainbow_mist', 'coin_splash'], interactive: true, description: 'Make a wish and see it come true' });
 
-        // Wizard's Tower
-        landmarks.push({
-            id: 'wizard_tower',
-            x: centerX - 15,
-            y: centerY - 12,
-            type: 'tower',
-            name: 'Wizard\'s Tower',
-            size: 'medium',
-            model: 'wizard_tower_3d',
-            animations: ['magic_swirl', 'window_light', 'star_orbit'],
-            interactive: true,
-            description: 'Home to ancient magical knowledge'
-        });
-
-        // Fountain of Dreams
-        landmarks.push({
-            id: 'dream_fountain',
-            x: centerX + 15,
-            y: centerY + 10,
-            type: 'fountain',
-            name: 'Fountain of Dreams',
-            size: 'medium',
-            model: 'magical_fountain_3d',
-            animations: ['water_flow', 'rainbow_mist', 'coin_splash'],
-            interactive: true,
-            description: 'Make a wish and see it come true'
-        });
-
-        // Enchanted elements
-        const enchantedElements = [
-            { x: 10, y: 25, type: 'tree', name: 'Ancient Oak', size: 'small' },
-            { x: 50, y: 20, type: 'crystal', name: 'Power Crystal', size: 'small' },
-            { x: 30, y: 40, type: 'portal', name: 'Mystery Portal', size: 'small' },
-            { x: 45, y: 35, type: 'statue', name: 'Hero Statue', size: 'small' }
-        ];
-
+        const enchantedElements = [{ x: 10, y: 25, type: 'tree', name: 'Ancient Oak', size: 'small' }, { x: 50, y: 20, type: 'crystal', name: 'Power Crystal', size: 'small' }, { x: 30, y: 40, type: 'portal', name: 'Mystery Portal', size: 'small' }, { x: 45, y: 35, type: 'statue', name: 'Hero Statue', size: 'small' }];
         enchantedElements.forEach((element, index) => {
-            landmarks.push({
-                id: `enchanted_${element.type}_${index}`,
-                x: element.x,
-                y: element.y,
-                type: element.type,
-                name: element.name,
-                size: element.size,
-                model: `${element.type}_model`,
-                animations: [this.getElementAnimation(element.type)],
-                decorative: true
-            });
+            landmarks.push({ id: `enchanted_${element.type}_${index}`, x: element.x, y: element.y, type: element.type, name: element.name, size: element.size, model: `${element.type}_model`, animations: [this.getElementAnimation(element.type)], decorative: true });
         });
-
         return landmarks;
     }
 
-    // Get animations for different element types
     getElementAnimation(type) {
-        const animations = {
-            'tree': 'sway_leaves',
-            'crystal': 'pulse_glow',
-            'portal': 'swirl_energy',
-            'statue': 'ambient_glow'
-        };
-        
+        const animations = { 'tree': 'sway_leaves', 'crystal': 'pulse_glow', 'portal': 'swirl_energy', 'statue': 'ambient_glow' };
         return animations[type] || 'gentle_float';
     }
 
-    // Generate star locations
     generateStarLocations(spaces) {
         const starSpaces = spaces.filter(space => space.type === 'STAR');
         return starSpaces.map((space, index) => ({
@@ -511,115 +378,11 @@ export class BoardGenerator {
         }));
     }
 
-    // Generate special visual effects
     generateSpecialEffects(width, height) {
         return [
-            {
-                id: 'aurora_effect',
-                type: 'aurora',
-                area: { x: 0, y: 0, width: width, height: height * 0.3 },
-                colors: ['#8b5cf6', '#3b82f6', '#10b981'],
-                animation: 'wave_flow',
-                layer: 'background'
-            },
-            {
-                id: 'floating_islands',
-                type: 'floating_element',
-                positions: [
-                    { x: 15, y: 15 },
-                    { x: width - 15, y: 20 },
-                    { x: 20, y: height - 15 }
-                ],
-                animation: 'gentle_bob',
-                layer: 'midground'
-            },
-            {
-                id: 'magical_particles',
-                type: 'particle_system',
-                emitters: [
-                    { x: width/2, y: height/2, rate: 5, type: 'star' },
-                    { x: 10, y: 10, rate: 3, type: 'sparkle' },
-                    { x: width-10, y: height-10, rate: 3, type: 'sparkle' }
-                ],
-                layer: 'foreground'
-            }
+            { id: 'aurora_effect', type: 'aurora', area: { x: 0, y: 0, width: width, height: height * 0.3 }, colors: ['#8b5cf6', '#3b82f6', '#10b981'], animation: 'wave_flow', layer: 'background' },
+            { id: 'floating_islands', type: 'floating_element', positions: [{ x: 15, y: 15 }, { x: width - 15, y: 20 }, { x: 20, y: height - 15 }], animation: 'gentle_bob', layer: 'midground' },
+            { id: 'magical_particles', type: 'particle_system', emitters: [{ x: width / 2, y: height / 2, rate: 5, type: 'star' }, { x: 10, y: 10, rate: 3, type: 'sparkle' }, { x: width - 10, y: height - 10, rate: 3, type: 'sparkle' }], layer: 'foreground' }
         ];
-    }
-
-    // Connect spaces with intelligent pathfinding
-    connectSpaces(spaces) {
-        // Connect main path in a loop
-        const mainPathSpaces = spaces.filter(s => s.pathType === 'main')
-                                    .sort((a, b) => a.pathIndex - b.pathIndex);
-        
-        for (let i = 0; i < mainPathSpaces.length; i++) {
-            const current = mainPathSpaces[i];
-            const next = mainPathSpaces[(i + 1) % mainPathSpaces.length];
-            current.connections.push(next.id);
-        }
-
-        // Connect branches
-        const branchGroups = this.groupBy(spaces.filter(s => s.pathType === 'branch'), 'branchId');
-        
-        Object.values(branchGroups).forEach(branch => {
-            branch.sort((a, b) => a.pathIndex - b.pathIndex);
-            
-            // Connect branch spaces
-            for (let i = 0; i < branch.length - 1; i++) {
-                branch[i].connections.push(branch[i + 1].id);
-                branch[i + 1].connections.push(branch[i].id);
-            }
-            
-            // Connect to main path
-            if (branch.length > 0) {
-                const connectionPoint = branch[0].connectionPoint;
-                const mainSpace = mainPathSpaces[connectionPoint];
-                if (mainSpace) {
-                    mainSpace.connections.push(branch[0].id);
-                    branch[0].connections.push(mainSpace.id);
-                    
-                    // Connect branch end back to main path
-                    const endConnection = (connectionPoint + 5) % mainPathSpaces.length;
-                    const endMainSpace = mainPathSpaces[endConnection];
-                    if (endMainSpace && branch[branch.length - 1]) {
-                        branch[branch.length - 1].connections.push(endMainSpace.id);
-                    }
-                }
-            }
-        });
-
-        // Connect warp spaces
-        const warpSpaces = spaces.filter(s => s.type === 'WARP');
-        warpSpaces.forEach(warp => {
-            if (warp.warpPartner !== undefined) {
-                const partner = spaces.find(s => s.id === warp.warpPartner);
-                if (partner) {
-                    warp.connections.push(partner.id);
-                }
-            }
-        });
-    }
-
-    // Helper function
-    groupBy(array, key) {
-        return array.reduce((groups, item) => {
-            const group = item[key];
-            groups[group] = groups[group] || [];
-            groups[group].push(item);
-            return groups;
-        }, {});
-    }
-
-    // Generate spawn zones
-    generateSpawnZones(spaces) {
-        const startSpace = spaces.find(s => s.pathType === 'main' && s.pathIndex === 0);
-        return startSpace ? [{
-            id: 'main_spawn',
-            spaceId: startSpace.id,
-            x: startSpace.x,
-            y: startSpace.y,
-            capacity: 8,
-            type: 'default'
-        }] : [];
     }
 }

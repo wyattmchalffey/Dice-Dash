@@ -27,6 +27,7 @@ const BoardRenderer = ({
     const animationRef = useRef(null);
     const lastUpdateTime = useRef(0);
     const mousePos = useRef({ x: 0, y: 0 });
+    const [stars, setStars] = useState([]);
 
     // Enhanced visual constants
     const SPACE_SIZE = 40;
@@ -47,6 +48,21 @@ const BoardRenderer = ({
         { primary: '#06b6d4', secondary: '#0891b2', glow: '#67e8f9' },
         { primary: '#84cc16', secondary: '#65a30d', glow: '#bef264' }
     ];
+
+    useEffect(() => {
+        // This code runs only once to generate the star data
+        const generatedStars = [];
+        for (let i = 0; i < 200; i++) { // Increase star count for a richer field
+            generatedStars.push({
+                x: Math.random(), // Relative X position (0 to 1)
+                y: Math.random(), // Relative Y position (0 to 1)
+                size: Math.random() * 2 + 0.5,
+                // Each star gets its own random speed for twinkling, making the effect look natural
+                twinkleSpeed: Math.random() * 0.3 + 0.1,
+            });
+        }
+        setStars(generatedStars);
+    }, []);
 
     // Particle system for visual effects
     class Particle {
@@ -118,40 +134,46 @@ const BoardRenderer = ({
 
     // Enhanced theme background with animated gradient
     const drawThemeBackground = useCallback((ctx, width, height, deltaTime) => {
-        const time = Date.now() * 0.0001;
-        
-        // Create animated gradient
+        // Get a consistent time value for animations
+        const time = Date.now() * 0.0005; // Slower time for more subtle animation
+
+        // --- Step 1: Draw the animated background gradient (this part remains the same) ---
         const gradient = ctx.createLinearGradient(0, 0, width, height);
-        const hue1 = (time * 10) % 360;
-        const hue2 = (hue1 + 60) % 360;
-        
-        if (board?.theme?.id === 'classic_plains') {
-            gradient.addColorStop(0, '#1e3a5f'); // Deep blue sky
-            gradient.addColorStop(0.5, '#2d5a8e');
-            gradient.addColorStop(1, '#1e3a5f');
-        } else if (board?.theme?.id === 'crystal_cave') {
-            gradient.addColorStop(0, '#0f172a'); // Dark cave
-            gradient.addColorStop(0.5, '#1e293b');
-            gradient.addColorStop(1, '#0f172a');
-        } else {
-            gradient.addColorStop(0, '#0c4a6e'); // Ocean blue
-            gradient.addColorStop(0.5, '#0284c7');
-            gradient.addColorStop(1, '#0c4a6e');
-        }
-        
+        const baseColor = board?.theme?.backgroundColor || '#0f172a';
+        const animatedHue = (time * 5) % 360; // Slower hue shift
+        const shimmeringColor = `hsl(${animatedHue}, 70%, 20%)`;
+
+        gradient.addColorStop(0, baseColor);
+        gradient.addColorStop(0.5, shimmeringColor);
+        gradient.addColorStop(1, baseColor);
+
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
 
-        // Add subtle pattern overlay
-        ctx.globalAlpha = 0.05;
-        for (let x = 0; x < width; x += 100) {
-            for (let y = 0; y < height; y += 100) {
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(x + Math.sin(time + x * 0.01) * 10, y + Math.cos(time + y * 0.01) * 10, 2, 2);
+        // --- Step 2: Draw the persistent and smoothly twinkling starfield ---
+        // Iterate over the pre-generated stars instead of creating new ones
+        stars.forEach(star => {
+            // Create a smooth twinkle effect using a sine wave.
+            // This oscillates the star's opacity between a min and max value.
+            const twinkleFactor = Math.sin(time * star.twinkleSpeed + star.x * Math.PI); // The "+ star.x" desynchronizes the stars
+            const opacity = Math.max(0, Math.min(1, 0.5 + twinkleFactor * 0.5)); // Clamp opacity between 0 and 1
+
+            if (opacity > 0.1) { // Only draw stars that are bright enough to see
+                ctx.globalAlpha = opacity;
+                ctx.fillStyle = 'white';
+
+                // Scale the star's relative position to the actual canvas dimensions
+                const x = star.x * width;
+                const y = star.y * height;
+
+                ctx.fillRect(x, y, star.size, star.size);
             }
-        }
+        });
+
+        // --- Step 3: VERY IMPORTANT - Reset global alpha ---
         ctx.globalAlpha = 1.0;
-    }, [board?.theme?.id]);
+
+    }, [board?.theme, stars]);
 
     // Enhanced space rendering with glow effects
     const drawSpace = useCallback((ctx, space, spaceSize, canvasWidth, canvasHeight, deltaTime) => {
@@ -255,11 +277,20 @@ const BoardRenderer = ({
     const drawPlayers = (ctx, visibleSpaces, spaceSize, canvasWidth, canvasHeight) => {
         if (!boardManager || !game || !game.players) return;
 
+        // Use the playerPositions Map from the boardManager instance
+        if (!(boardManager.playerPositions instanceof Map)) {
+            console.error("boardManager.playerPositions is not a Map!", boardManager.playerPositions);
+            return; // Exit if the map isn't ready
+        }
+
         const playersArray = Array.isArray(game.players) ? game.players : [];
         const playersOnSpaces = new Map();
-        
+
         playersArray.forEach(player => {
-            const position = boardManager.getPlayerPosition(player.userId);
+            // --- FIX IS HERE ---
+            // Changed from boardManager.getPlayerPosition(player.userId)
+            const position = boardManager.playerPositions.get(player.userId);
+
             if (position !== undefined) {
                 if (!playersOnSpaces.has(position)) {
                     playersOnSpaces.set(position, []);
@@ -278,12 +309,13 @@ const BoardRenderer = ({
             players.forEach((player, index) => {
                 const playerIndex = playersArray.findIndex(p => p.userId === player.userId);
                 const colorScheme = PLAYER_COLORS[playerIndex % PLAYER_COLORS.length];
-                
+
                 const angle = (index / players.length) * 2 * Math.PI;
                 const radius = players.length > 1 ? spaceSize * 0.35 : 0;
                 const x = spaceX + Math.cos(angle) * radius;
                 const y = spaceY + Math.sin(angle) * radius;
 
+                // ... (the rest of the drawing logic remains the same)
                 // Draw player shadow
                 ctx.save();
                 ctx.globalAlpha = 0.3;
@@ -304,7 +336,7 @@ const BoardRenderer = ({
                 ctx.save();
                 ctx.shadowColor = colorScheme.primary;
                 ctx.shadowBlur = 10;
-                
+
                 // Outer ring
                 ctx.fillStyle = colorScheme.primary;
                 ctx.strokeStyle = '#ffffff';
@@ -337,10 +369,10 @@ const BoardRenderer = ({
                     ctx.font = `bold ${Math.max(12, PLAYER_SIZE * zoom * 0.5)}px Arial`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'top';
-                    
+
                     const name = player.name || player.displayName || `Player ${playerIndex + 1}`;
                     const shortName = name.length > 10 ? name.substring(0, 10) + '...' : name;
-                    
+
                     ctx.strokeText(shortName, x, y + PLAYER_SIZE * zoom * 0.5);
                     ctx.fillText(shortName, x, y + PLAYER_SIZE * zoom * 0.5);
                 }
@@ -352,67 +384,76 @@ const BoardRenderer = ({
 
     // Enhanced connection drawing with animated flow
     const drawSpaceConnections = useCallback((ctx, spaces, spaceSize, canvasWidth, canvasHeight, deltaTime) => {
+        // Get a time value for animations
         const time = Date.now() * 0.001;
+        // Use a Set to avoid drawing the same connection twice (e.g., from space 1 to 2 and 2 to 1)
         const drawnConnections = new Set();
 
         spaces.forEach(space => {
+            // Skip if the space has no connections
             if (!space.connections) return;
 
             space.connections.forEach(targetId => {
+                // Create a unique key for the connection to avoid duplicates
                 const connectionKey = `${Math.min(space.id, targetId)}-${Math.max(space.id, targetId)}`;
                 if (drawnConnections.has(connectionKey)) return;
                 drawnConnections.add(connectionKey);
 
                 const targetSpace = spaces.find(s => s.id === targetId);
-                if (!targetSpace) return;
+                if (!targetSpace) return; // Make sure the target space exists
 
+                // Calculate the start and end coordinates on the canvas
                 const x1 = (space.x - viewCenter.x) * spaceSize + canvasWidth / 2;
                 const y1 = (space.y - viewCenter.y) * spaceSize + canvasHeight / 2;
                 const x2 = (targetSpace.x - viewCenter.x) * spaceSize + canvasWidth / 2;
                 const y2 = (targetSpace.y - viewCenter.y) * spaceSize + canvasHeight / 2;
 
-                // Draw path shadow
+                // --- Step 1: Draw path shadow for depth ---
                 ctx.save();
                 ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
-                ctx.lineWidth = spaceSize * 0.25;
+                ctx.lineWidth = spaceSize * 0.25; // A slightly thicker shadow
                 ctx.lineCap = 'round';
                 ctx.shadowBlur = 10;
                 ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-                ctx.shadowOffsetY = 3;
-                
+                ctx.shadowOffsetY = 3; // Give it a subtle 3D lift
+
                 ctx.beginPath();
                 ctx.moveTo(x1, y1);
                 ctx.lineTo(x2, y2);
                 ctx.stroke();
                 ctx.restore();
 
-                // Draw main path
+                // --- Step 2: Draw the main path ---
+                // Use the path color defined in the board's theme, with a fallback
+                const pathColor = board?.theme?.pathColor || '#fbbf24';
                 const gradient = ctx.createLinearGradient(x1, y1, x2, y2);
-                gradient.addColorStop(0, board?.theme?.pathColor || '#fbbf24');
-                gradient.addColorStop(1, board?.theme?.pathColor || '#f59e0b');
+                gradient.addColorStop(0, pathColor);
+                gradient.addColorStop(1, pathColor); // Using a solid gradient for consistency
 
                 ctx.strokeStyle = gradient;
-                ctx.lineWidth = spaceSize * 0.2;
+                ctx.lineWidth = spaceSize * 0.2; // The actual visible path
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
-                
+
                 ctx.beginPath();
                 ctx.moveTo(x1, y1);
                 ctx.lineTo(x2, y2);
                 ctx.stroke();
 
-                // Draw animated dots along the path
+                // --- Step 3: Draw animated dots for a sense of flow ---
                 const distance = Math.hypot(x2 - x1, y2 - y1);
-                const numDots = Math.floor(distance / 30);
-                
+                const numDots = Math.floor(distance / 30); // Add a dot every 30 pixels
+
                 for (let i = 0; i < numDots; i++) {
+                    // Animate the dot's position along the path
                     const progress = ((i / numDots + time * 0.2) % 1);
                     const dotX = x1 + (x2 - x1) * progress;
                     const dotY = y1 + (y2 - y1) * progress;
-                    
+
+                    // Make the dots semi-transparent white
                     ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
                     ctx.beginPath();
-                    ctx.arc(dotX, dotY, 2, 0, Math.PI * 2);
+                    ctx.arc(dotX, dotY, 2, 0, Math.PI * 2); // Draw a small circle
                     ctx.fill();
                 }
             });

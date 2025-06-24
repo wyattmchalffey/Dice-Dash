@@ -1,5 +1,4 @@
 // src/systems/energy-system.js
-// Core energy management system for MMO Party Quest
 
 export class EnergySystem {
     constructor() {
