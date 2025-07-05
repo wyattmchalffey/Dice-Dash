@@ -30,6 +30,7 @@ export default class BoardScene extends Phaser.Scene {
     
     // Create dice
     this.dice = new Dice(this, this.cameras.main.centerX, this.cameras.main.height - 100);
+    this.dice.create();
     
     // Create UI
     this.createUI();
@@ -39,6 +40,23 @@ export default class BoardScene extends Phaser.Scene {
       this.roomData.players.forEach(playerData => {
         this.createPlayer(playerData);
       });
+    } else {
+      // Create a demo player if no room data
+      this.createPlayer({
+        id: 'demo-player',
+        name: this.playerData?.name || 'Player',
+        position: 0,
+        coins: 10,
+        energy: 5,
+        color: 0xff6b6b
+      });
+    }
+    
+    // Set current player
+    if (this.playerData) {
+      this.currentPlayerId = this.playerData.id;
+      this.isMyTurn = true;
+      this.updateTurnIndicator();
     }
     
     // Set up socket listeners
@@ -133,6 +151,11 @@ export default class BoardScene extends Phaser.Scene {
 
   createPlayer(playerData) {
     const startSpace = this.board.getSpace(0);
+    if (!startSpace) {
+      console.error('Could not find start space');
+      return;
+    }
+    
     const player = new Player(
       this,
       playerData.id,
@@ -143,6 +166,11 @@ export default class BoardScene extends Phaser.Scene {
     );
     
     this.players.set(playerData.id, player);
+    
+    // Update player state with data
+    if (playerData.coins !== undefined) {
+      player.updateCoins(playerData.coins);
+    }
     
     // Update players list UI
     this.updatePlayersList();
@@ -258,7 +286,10 @@ export default class BoardScene extends Phaser.Scene {
   }
 
   rollDice() {
-    if (!this.isMyTurn || this.dice.isRolling) return;
+    if (!this.isMyTurn || !this.dice || this.dice.isRolling) return;
+    
+    const currentPlayer = this.players.get(this.currentPlayerId || this.playerData?.id);
+    if (!currentPlayer) return;
     
     // Disable button
     this.uiElements.rollButton.setAlpha(0.5);
@@ -271,7 +302,8 @@ export default class BoardScene extends Phaser.Scene {
       // Local testing
       const result = Math.floor(Math.random() * 6) + 1;
       this.handleDiceRoll({
-        playerId: 'local',
+        playerId: currentPlayer.id,
+        playerName: currentPlayer.name,
         diceResult: { rolls: [result], total: result }
       });
     }

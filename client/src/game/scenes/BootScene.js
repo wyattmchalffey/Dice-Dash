@@ -184,7 +184,13 @@ export default class BootScene extends Phaser.Scene {
   }
 
   create() {
-    // Add game title
+    // Check if we should go directly to board (when joining from GameView)
+    if (this.scene.settings.data && this.scene.settings.data.skipMenu) {
+      this.scene.start('BoardScene', this.scene.settings.data);
+      return;
+    }
+    
+    // Otherwise show the title screen
     this.add.text(this.cameras.main.centerX, this.cameras.main.centerY - 100, 'Dice Dash', {
       fontSize: '64px',
       fontFamily: 'Arial',
@@ -212,7 +218,7 @@ export default class BootScene extends Phaser.Scene {
     
     // Click to continue
     this.input.once('pointerdown', () => {
-      this.scene.start('BoardScene');
+      this.scene.start('MenuScene');
     });
   }
 }

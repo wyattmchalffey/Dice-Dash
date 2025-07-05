@@ -12,6 +12,9 @@ export default class Dice {
     // Create dice sprite
     this.diceSprite = this.scene.add.image(this.x, this.y, 'dice_1');
     this.diceSprite.setScale(1.5);
+    
+    // Return this for chaining
+    return this;
   }
 
   roll(finalValue, callback) {

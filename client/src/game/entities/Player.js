@@ -13,6 +13,10 @@ export default class Player {
     this.sprite = null;
     this.nameText = null;
     this.coinText = null;
+    this.initialText = null;
+    
+    // Create the player immediately
+    this.create();
   }
 
   create() {
@@ -22,7 +26,7 @@ export default class Player {
     
     // Add player number or initial
     const initial = this.name.charAt(0).toUpperCase();
-    this.scene.add.text(this.x, this.y, initial, {
+    this.initialText = this.scene.add.text(this.x, this.y, initial, {
       fontSize: '16px',
       fontFamily: 'Arial',
       color: '#ffffff',
@@ -67,11 +71,12 @@ export default class Player {
     
     path.forEach((space, index) => {
       timeline.add({
-        targets: [this.sprite, this.nameText, this.coinText],
+        targets: [this.sprite, this.nameText, this.coinText, this.initialText],
         x: space.x,
         y: {
           value: (target) => {
             if (target === this.sprite) return space.y;
+            if (target === this.initialText) return space.y;
             if (target === this.nameText) return space.y - 35;
             if (target === this.coinText) return space.y + 35;
           }
@@ -104,11 +109,12 @@ export default class Player {
 
   moveTo(x, y, duration = 500) {
     this.scene.tweens.add({
-      targets: [this.sprite, this.nameText, this.coinText],
+      targets: [this.sprite, this.nameText, this.coinText, this.initialText],
       x: x,
       y: {
         value: (target) => {
           if (target === this.sprite) return y;
+          if (target === this.initialText) return y;
           if (target === this.nameText) return y - 35;
           if (target === this.coinText) return y + 35;
         }
@@ -224,6 +230,7 @@ export default class Player {
     if (this.sprite) this.sprite.destroy();
     if (this.nameText) this.nameText.destroy();
     if (this.coinText) this.coinText.destroy();
+    if (this.initialText) this.initialText.destroy();
     if (this.glowEffect) this.glowEffect.destroy();
   }
 }

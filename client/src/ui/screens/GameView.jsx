@@ -12,26 +12,28 @@ function GameView({ playerData, roomData, socketManager, onLeaveGame }) {
     if (!phaserGameRef.current && gameRef.current) {
       const config = {
         ...gameConfig,
-        parent: gameRef.current,
-        scene: {
-          ...gameConfig.scene,
-          // Pass data to scenes
-          init: function(data) {
-            this.socketManager = socketManager;
-            this.playerData = playerData;
-            this.roomData = roomData;
-          }
-        }
+        parent: gameRef.current
       };
       
       phaserGameRef.current = new Phaser.Game(config);
       
-      // Start with the board scene
-      phaserGameRef.current.scene.start('BoardScene', {
-        socketManager,
-        playerData,
-        roomData
-      });
+      // Wait for Phaser to be ready, then start directly with BoardScene
+      const checkReady = setInterval(() => {
+        if (phaserGameRef.current && phaserGameRef.current.scene && phaserGameRef.current.scene.scenes.length > 0) {
+          clearInterval(checkReady);
+          
+          // Get the boot scene and skip directly to board
+          const bootScene = phaserGameRef.current.scene.getScene('BootScene');
+          if (bootScene) {
+            phaserGameRef.current.scene.start('BootScene', {
+              skipMenu: true,
+              socketManager,
+              playerData,
+              roomData
+            });
+          }
+        }
+      }, 50);
     }
 
     // Cleanup on unmount
@@ -41,7 +43,7 @@ function GameView({ playerData, roomData, socketManager, onLeaveGame }) {
         phaserGameRef.current = null;
       }
     };
-  }, []);
+  }, [socketManager, playerData, roomData]);
 
   return (
     <div className="game-view">
