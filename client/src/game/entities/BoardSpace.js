@@ -1,4 +1,4 @@
-import { SPACE_CONFIG } from '../../../../shared/constants/SpaceTypes';
+import { SPACE_CONFIG } from '../../shared/constants/SpaceTypes';
 
 export default class BoardSpace {
   constructor(scene, index, x, y, type) {

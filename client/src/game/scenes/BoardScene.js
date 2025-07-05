@@ -2,8 +2,8 @@ import Phaser from 'phaser';
 import Board from '../entities/Board';
 import Player from '../entities/Player';
 import Dice from '../entities/Dice';
-import { SPACE_CONFIG } from '../../../../shared/constants/SpaceTypes';
-import { SOCKET_EVENTS } from '../../../../shared/constants/Events';
+import { SPACE_CONFIG } from '../../shared/constants/SpaceTypes';
+import { SOCKET_EVENTS } from '../../shared/constants/Events';
 
 export default class BoardScene extends Phaser.Scene {
   constructor() {

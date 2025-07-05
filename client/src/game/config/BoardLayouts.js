@@ -1,4 +1,4 @@
-import { SPACE_TYPES } from '../../../../shared/constants/SpaceTypes';
+import { SPACE_TYPES } from '../../shared/constants/SpaceTypes';
 
 // Predefined board layouts
 export const BOARD_LAYOUTS = {

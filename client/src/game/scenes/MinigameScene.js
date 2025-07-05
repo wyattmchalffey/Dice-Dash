@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import MemoryMatch from '../minigames/MemoryMatch';
 import FruitSlash from '../minigames/FruitSlash';
 import QuickTap from '../minigames/QuickTap';
-import { SOCKET_EVENTS } from '../../../../shared/constants/Events';
+import { SOCKET_EVENTS } from '../../shared/constants/Events';
 
 export default class MinigameScene extends Phaser.Scene {
   constructor() {
