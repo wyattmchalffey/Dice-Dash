@@ -1,5 +1,5 @@
 import io from 'socket.io-client';
-import { SOCKET_EVENTS } from '../../../shared/constants/Events';
+import { SOCKET_EVENTS } from '../shared/constants/Events';
 
 export class SocketManager {
   constructor() {

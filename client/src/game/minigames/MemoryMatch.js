@@ -89,6 +89,8 @@ export default class MemoryMatch extends BaseMinigame {
     cardBack.on('pointerdown', () => this.flipCard(card));
     cardBack.on('pointerover', () => {
       if (!card.isFlipped && !card.isMatched) {
+        });
+        
         this.flippedCards = [];
         this.canFlip = true;
       });
