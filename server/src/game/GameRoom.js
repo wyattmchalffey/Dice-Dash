@@ -71,33 +71,23 @@ export class GameRoom {
     this.updateActivity();
   }
 
-  // Start the game
-  startGame() {
-    this.state = GAME_STATES.IN_PROGRESS;
-    
-    // Initialize turn order
-    const playerIds = Array.from(this.players.keys());
-    this.turnManager.initializeTurnOrder(playerIds);
-    
-    // Notify all players
-    this.broadcast(SOCKET_EVENTS.GAME_STATE_UPDATE, {
-      state: this.state,
-      currentPlayer: this.turnManager.getCurrentPlayer(),
-      turnOrder: this.turnManager.getTurnOrder()
-    });
-    
-    console.log(`Game started in room ${this.id} with ${this.players.size} players`);
-  }
+    // Update startGame method to not initialize turns:
+    startGame() {
+        this.state = GAME_STATES.IN_PROGRESS;
+        this.broadcast(SOCKET_EVENTS.GAME_STATE_UPDATE, {
+            state: this.state
+        });
+
+        console.log(`Game started in room ${this.id} with ${this.players.size} players`);
+    }
 
   // Handle dice roll
   async handleRollDice(playerId) {
     const player = this.players.get(playerId);
     if (!player) throw new Error('Player not found');
     
-    // Validate turn
-    if (!this.turnManager.isCurrentPlayer(playerId)) {
-      throw new Error('Not your turn');
-    }
+    // REMOVED: Turn validation
+    // Now any player can roll as long as they have energy
     
     // Check energy
     if (!player.hasEnergy(GAME_CONFIG.ENERGY_COST_PER_TURN)) {
@@ -105,15 +95,14 @@ export class GameRoom {
     }
     
     // Use energy
-      player.useEnergy(GAME_CONFIG.ENERGY_COST_PER_TURN);
+    player.useEnergy(GAME_CONFIG.ENERGY_COST_PER_TURN);
 
     // Broadcast energy update immediately after using energy
-      this.broadcast(SOCKET_EVENTS.ENERGY_UPDATED, {
-          playerId: playerId,
-          currentEnergy: player.energy,
-          maxEnergy: GAME_CONFIG.MAX_ENERGY
-      });
-
+    this.broadcast(SOCKET_EVENTS.ENERGY_UPDATED, {
+        playerId: playerId,
+        currentEnergy: player.energy,
+        maxEnergy: GAME_CONFIG.MAX_ENERGY
+    });
 
     // Roll dice
     const diceResult = rollDice();
