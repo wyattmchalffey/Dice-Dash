@@ -18,6 +18,17 @@ export default class BoardScene extends Phaser.Scene {
 
   init(data) {
     console.log('BoardScene init with data:', data);
+    
+    // Debug socketManager
+    if (data.socketManager) {
+      console.log('socketManager type:', typeof data.socketManager);
+      console.log('socketManager has "on" method:', typeof data.socketManager.on === 'function');
+      console.log('socketManager has "emit" method:', typeof data.socketManager.emit === 'function');
+      console.log('socketManager object:', data.socketManager);
+    } else {
+      console.warn('No socketManager provided in scene data');
+    }
+    
     this.boardType = data.boardType || 'demo';
     this.socketManager = data.socketManager;
     this.playerData = data.playerData;
@@ -195,6 +206,29 @@ export default class BoardScene extends Phaser.Scene {
     }).setOrigin(0, 1);
   }
 
+  setupCamera() {
+    // Set camera bounds to board area
+    this.cameras.main.setBounds(0, 0, 1200, 800);
+    
+    // Enable camera drag
+    this.input.on('pointermove', (pointer) => {
+      if (pointer.isDown && pointer.button === 0) {
+        this.cameras.main.scrollX -= (pointer.x - pointer.prevPosition.x);
+        this.cameras.main.scrollY -= (pointer.y - pointer.prevPosition.y);
+      }
+    });
+    
+    // Zoom controls
+    this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
+      const zoom = this.cameras.main.zoom;
+      if (deltaY > 0) {
+        this.cameras.main.setZoom(Math.max(0.5, zoom - 0.1));
+      } else {
+        this.cameras.main.setZoom(Math.min(2, zoom + 0.1));
+      }
+    });
+  }
+
   createPlayer(playerData) {
     console.log('Creating player:', playerData);
     
@@ -257,132 +291,6 @@ export default class BoardScene extends Phaser.Scene {
     });
   }
 
-  rollDice() {
-    console.log('rollDice() called');
-    console.log('isMyTurn:', this.isMyTurn);
-    console.log('dice exists:', !!this.dice);
-    console.log('dice.isRolling:', this.dice?.isRolling);
-    console.log('currentPlayerId:', this.currentPlayerId);
-    console.log('playerData?.id:', this.playerData?.id);
-    
-    // Check conditions
-    if (!this.isMyTurn) {
-      console.log('Not your turn!');
-      this.showNotification('Not your turn!');
-      return;
-    }
-    
-    if (!this.dice) {
-      console.log('No dice object!');
-      this.showNotification('Dice not ready!');
-      return;
-    }
-    
-    if (this.dice.isRolling) {
-      console.log('Dice already rolling!');
-      return;
-    }
-    
-    const currentPlayer = this.players.get(this.currentPlayerId || this.playerData?.id);
-    if (!currentPlayer) {
-      console.log('No current player found!');
-      console.log('Available players:', Array.from(this.players.keys()));
-      this.showNotification('Player not found!');
-      return;
-    }
-    
-    console.log('All conditions passed, rolling dice...');
-    
-    // Update debug text
-    this.uiElements.debugText.setText('Debug: Rolling...');
-    
-    // Disable button
-    this.uiElements.rollButton.setAlpha(0.5);
-    this.uiElements.rollButton.disableInteractive();
-    
-    // Send roll request to server or handle locally
-    if (this.socketManager && this.socketManager.isConnected()) {
-      console.log('Sending roll request to server...');
-      this.socketManager.emit(SOCKET_EVENTS.REQUEST_ROLL);
-    } else {
-      // Local testing
-      console.log('No socket connection, handling locally...');
-      const result = Math.floor(Math.random() * 6) + 1;
-      console.log('Local roll result:', result);
-      
-      this.handleDiceRoll({
-        playerId: currentPlayer.id,
-        playerName: currentPlayer.name,
-        diceResult: { rolls: [result], total: result }
-      });
-    }
-  }
-
-  handleDiceRoll(data) {
-    console.log('handleDiceRoll called with:', data);
-    
-    const player = this.players.get(data.playerId);
-    if (!player) {
-      console.log('Player not found for dice roll:', data.playerId);
-      return;
-    }
-    
-    // Animate dice
-    this.dice.roll(data.diceResult.total, () => {
-      console.log('Dice roll animation complete');
-      
-      // Re-enable button after a delay
-      this.time.delayedCall(1000, () => {
-        this.uiElements.rollButton.setAlpha(1);
-        this.uiElements.rollButton.setInteractive();
-        this.uiElements.debugText.setText('Debug: Ready');
-      });
-    });
-    
-    // Show notification
-    this.showNotification(`${data.playerName} rolled ${data.diceResult.total}!`);
-    
-    // TODO: Move player based on roll result
-    // For now, just log it
-    console.log(`Player ${data.playerName} should move ${data.diceResult.total} spaces`);
-  }
-
-  showNotification(message) {
-    console.log('Notification:', message);
-    
-    // Remove existing notification
-    if (this.currentNotification) {
-      this.currentNotification.destroy();
-    }
-    
-    // Create new notification
-    const { width, height } = this.cameras.main;
-    this.currentNotification = this.add.text(width / 2, height / 2 - 100, message, {
-      fontSize: '32px',
-      fontFamily: 'Arial',
-      color: '#ffffff',
-      backgroundColor: '#000000',
-      padding: { x: 20, y: 10 }
-    }).setOrigin(0.5);
-    
-    // Fade out after delay
-    this.time.delayedCall(2000, () => {
-      if (this.currentNotification) {
-        this.tweens.add({
-          targets: this.currentNotification,
-          alpha: 0,
-          duration: 500,
-          onComplete: () => {
-            if (this.currentNotification) {
-              this.currentNotification.destroy();
-              this.currentNotification = null;
-            }
-          }
-        });
-      }
-    });
-  }
-
   updateTurnIndicator() {
     const currentPlayer = this.players.get(this.currentPlayerId);
     if (currentPlayer) {
@@ -393,7 +301,18 @@ export default class BoardScene extends Phaser.Scene {
   }
 
   setupSocketListeners() {
-    if (!this.socketManager) return;
+    // Add safety check for socketManager
+    if (!this.socketManager) {
+      console.warn('No socketManager available - running in offline/demo mode');
+      return;
+    }
+    
+    // Additional check for the 'on' method
+    if (typeof this.socketManager.on !== 'function') {
+      console.error('socketManager does not have an "on" method. Object type:', typeof this.socketManager);
+      console.error('socketManager object:', this.socketManager);
+      return;
+    }
     
     console.log('Setting up socket listeners...');
     
@@ -486,20 +405,171 @@ export default class BoardScene extends Phaser.Scene {
     });
   }
 
-  handlePlayerMove(data) {
-    console.log('handlePlayerMove called with:', data);
-    const player = this.players.get(data.playerId);
-    if (!player) {
-      console.log('Player not found for movement:', data.playerId);
+  rollDice() {
+    console.log('rollDice() called');
+    console.log('isMyTurn:', this.isMyTurn);
+    console.log('dice exists:', !!this.dice);
+    console.log('dice.isRolling:', this.dice?.isRolling);
+    console.log('currentPlayerId:', this.currentPlayerId);
+    console.log('playerData?.id:', this.playerData?.id);
+    
+    // Check conditions
+    if (!this.isMyTurn) {
+      console.log('Not your turn!');
+      this.showNotification('Not your turn!');
       return;
     }
+    
+    if (!this.dice) {
+      console.log('No dice object!');
+      this.showNotification('Dice not ready!');
+      return;
+    }
+    
+    if (this.dice.isRolling) {
+      console.log('Dice already rolling!');
+      return;
+    }
+    
+    const currentPlayer = this.players.get(this.currentPlayerId || this.playerData?.id);
+    if (!currentPlayer) {
+      console.log('No current player found!');
+      console.log('Available players:', Array.from(this.players.keys()));
+      this.showNotification('Player not found!');
+      return;
+    }
+    
+    console.log('All conditions passed, rolling dice...');
+    
+    // Update debug text
+    this.uiElements.debugText.setText('Debug: Rolling...');
+    
+    // Disable button
+    this.uiElements.rollButton.setAlpha(0.5);
+    this.uiElements.rollButton.disableInteractive();
+    
+    // Send roll request to server or handle locally
+    if (this.socketManager && typeof this.socketManager.emit === 'function') {
+      console.log('Sending roll request to server...');
+      this.socketManager.emit(SOCKET_EVENTS.REQUEST_ROLL);
+    } else {
+      // Local/demo mode - handle dice roll locally
+      console.log('No socket connection, handling locally...');
+      const result = Math.floor(Math.random() * 6) + 1;
+      console.log('Local roll result:', result);
+      
+      // Simulate the dice roll event
+      this.handleDiceRoll({
+        playerId: currentPlayer.id,
+        playerName: currentPlayer.name,
+        diceResult: { rolls: [result], total: result }
+      });
+      
+      // Simulate the movement event after a delay
+      this.time.delayedCall(1500, () => {
+        const newPosition = (currentPlayer.currentSpace + result) % this.board.spaces.length;
+        this.handlePlayerMove({
+          playerId: currentPlayer.id,
+          from: currentPlayer.currentSpace,
+          to: newPosition,
+          spaces: result
+        });
+        
+        // Simulate turn end after movement
+        this.time.delayedCall(1000, () => {
+          this.showNotification("Turn ended!");
+        });
+      });
+    }
+  }
+
+  handleDiceRoll(data) {
+    console.log('handleDiceRoll called with:', data);
+    
+    const player = this.players.get(data.playerId);
+    if (!player) {
+      console.log('Player not found for dice roll:', data.playerId);
+      return;
+    }
+    
+    // Store the dice result for fallback movement
+    this.lastDiceResult = data.diceResult;
+    this.lastDicePlayerId = data.playerId;
+    
+    // Animate dice
+    this.dice.roll(data.diceResult.total, () => {
+      console.log('Dice roll animation complete');
+      
+      // Re-enable button after a delay
+      this.time.delayedCall(1000, () => {
+        this.uiElements.rollButton.setAlpha(1);
+        this.uiElements.rollButton.setInteractive();
+        this.uiElements.debugText.setText('Debug: Ready');
+      });
+    });
+    
+    // Show notification
+    this.showNotification(`${data.playerName} rolled ${data.diceResult.total}!`);
+    
+    // Set a timeout to check if movement event was received
+    // If not, handle movement locally
+    this.movementTimeout = this.time.delayedCall(2000, () => {
+      if (this.lastDiceResult && this.lastDicePlayerId === data.playerId) {
+        console.log('No movement event received from server, handling locally...');
+        
+        // Calculate new position
+        const currentSpace = player.currentSpace || 0;
+        const newPosition = (currentSpace + data.diceResult.total) % this.board.spaces.length;
+        
+        // Trigger movement
+        this.handlePlayerMove({
+          playerId: data.playerId,
+          from: currentSpace,
+          to: newPosition,
+          spaces: data.diceResult.total
+        });
+        
+        // Clear the stored result
+        this.lastDiceResult = null;
+        this.lastDicePlayerId = null;
+      }
+    });
+  }
+
+  handlePlayerMove(data) {
+    console.log('=== PLAYER MOVEMENT DEBUG ===');
+    console.log('Movement data:', data);
+    console.log('From space:', data.from, 'To space:', data.to, 'Total spaces:', data.spaces);
+    
+    // Clear any pending movement timeout
+    if (this.movementTimeout) {
+      this.movementTimeout.remove();
+      this.movementTimeout = null;
+    }
+    
+    // Clear stored dice result since movement is happening
+    this.lastDiceResult = null;
+    this.lastDicePlayerId = null;
+    
+    const player = this.players.get(data.playerId);
+    if (!player) {
+      console.error('❌ Player not found for movement:', data.playerId);
+      console.log('Available players:', Array.from(this.players.keys()));
+      return;
+    }
+    
+    console.log('✅ Player found:', player.name);
     
     // Get the board spaces for the path
     const fromSpace = this.board.getSpace(data.from);
     const toSpace = this.board.getSpace(data.to);
     
+    console.log('From space object:', fromSpace);
+    console.log('To space object:', toSpace);
+    
     if (!fromSpace || !toSpace) {
-      console.log('Invalid space positions:', data.from, data.to);
+      console.error('❌ Invalid space positions');
+      console.log('Board has', this.board.spaces.length, 'spaces');
       return;
     }
     
@@ -507,23 +577,31 @@ export default class BoardScene extends Phaser.Scene {
     const path = [];
     const totalSpaces = data.spaces;
     
+    console.log('Building path with', totalSpaces, 'spaces...');
+    
     for (let i = 1; i <= totalSpaces; i++) {
       const spaceIndex = (data.from + i) % this.board.spaces.length;
       const space = this.board.getSpace(spaceIndex);
       if (space) {
         path.push(space);
+        console.log(`  Step ${i}: Space ${spaceIndex} at (${space.x}, ${space.y})`);
+      } else {
+        console.warn(`  Step ${i}: Could not find space ${spaceIndex}`);
       }
     }
     
-    console.log('Moving player along path:', path.length, 'spaces');
+    console.log('✅ Path built with', path.length, 'spaces');
     
     // Animate player movement
     if (path && path.length > 0) {
+      console.log('🏃 Moving player along path...');
       player.moveAlongPath(path, this.board);
     } else {
-      // Fallback: move directly to target position
+      console.log('⚡ Using fallback direct movement to target position');
       player.moveTo(toSpace.x, toSpace.y);
     }
+    
+    console.log('=== END MOVEMENT DEBUG ===');
   }
 
   handleSpaceAction(data) {
@@ -576,62 +654,123 @@ export default class BoardScene extends Phaser.Scene {
     }
   }
 
-  updateEnergy(data) {
-    console.log('updateEnergy called with:', data);
+  showNotification(message) {
+    console.log('Notification:', message);
     
-    // Update energy bars
-    this.uiElements.energyBars.forEach((bar, index) => {
-      if (index < data.currentEnergy) {
-        bar.setFillStyle(0xffcc00);  // Yellow for filled energy
-      } else {
-        bar.setFillStyle(0xcccccc);  // Gray for empty energy
+    // Remove existing notification
+    if (this.currentNotification) {
+      this.currentNotification.destroy();
+    }
+    
+    // Create new notification
+    const { width, height } = this.cameras.main;
+    this.currentNotification = this.add.text(width / 2, height / 2 - 100, message, {
+      fontSize: '32px',
+      fontFamily: 'Arial',
+      color: '#ffffff',
+      backgroundColor: '#000000',
+      padding: { x: 20, y: 10 }
+    }).setOrigin(0.5);
+    
+    // Fade out after delay
+    this.time.delayedCall(2000, () => {
+      if (this.currentNotification) {
+        this.tweens.add({
+          targets: this.currentNotification,
+          alpha: 0,
+          duration: 500,
+          onComplete: () => {
+            if (this.currentNotification) {
+              this.currentNotification.destroy();
+              this.currentNotification = null;
+            }
+          }
+        });
       }
     });
+  }
+
+  showSpaceEffect(x, y, color, message) {
+    // Create particle effect
+    const particles = [];
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      const particle = this.add.circle(
+        x + Math.cos(angle) * 20,
+        y + Math.sin(angle) * 20,
+        8,
+        color
+      );
+      particles.push(particle);
+      
+      this.tweens.add({
+        targets: particle,
+        x: x + Math.cos(angle) * 100,
+        y: y + Math.sin(angle) * 100,
+        alpha: 0,
+        duration: 800,
+        onComplete: () => particle.destroy()
+      });
+    }
     
-    // Update energy text if it exists
-    if (this.uiElements.energyText) {
-      this.uiElements.energyText.setText(`Energy: ${data.currentEnergy}/${data.maxEnergy || 5}`);
+    // Show message
+    const text = this.add.text(x, y - 50, message, {
+      fontSize: '24px',
+      fontFamily: 'Arial',
+      color: '#ffffff',
+      backgroundColor: '#000000',
+      padding: { x: 10, y: 5 }
+    }).setOrigin(0.5);
+    
+    this.tweens.add({
+      targets: text,
+      y: y - 100,
+      alpha: { from: 1, to: 0 },
+      duration: 1500,
+      onComplete: () => text.destroy()
+    });
+  }
+
+  updateEnergy(data) {
+    if (data.playerId === (this.roomData?.playerId || this.playerData?.id)) {
+      // Update energy bars
+      const energy = data.currentEnergy || 0;
+      const maxEnergy = data.maxEnergy || 5;
+      
+      this.uiElements.energyBars.forEach((bar, index) => {
+        if (index < energy) {
+          bar.setFillStyle(0xffcc00);
+        } else {
+          bar.setFillStyle(0x999999);
+        }
+      });
     }
   }
 
   updateCoinsDisplay(coins) {
     this.uiElements.coinsText.setText(`🪙 ${coins}`);
-  }
-
-  showSpaceEffect(x, y, color, message) {
-    // Create a visual effect at the space
-    const effect = this.add.circle(x, y, 50, color, 0.7);
     
+    // Animate coin text
     this.tweens.add({
-      targets: effect,
-      scaleX: 1.5,
-      scaleY: 1.5,
-      alpha: 0,
-      duration: 1000,
-      onComplete: () => effect.destroy()
+      targets: this.uiElements.coinsText,
+      scale: { from: 1, to: 1.2 },
+      duration: 200,
+      yoyo: true,
+      ease: 'Power2'
     });
-    
-    this.showNotification(message);
-  }
-
-  setupCamera() {
-    // Set camera bounds to match the game area
-    this.cameras.main.setBounds(0, 0, 1200, 800);
-    
-    // Center the camera on the board
-    this.cameras.main.centerOn(600, 400);
   }
 
   update(time, delta) {
-    // Update game entities
-    if (this.dice) {
-      this.dice.update(time, delta);
-    }
-    
+    // Update players
     this.players.forEach(player => {
       if (player.update) {
         player.update(time, delta);
       }
     });
+    
+    // Update dice
+    if (this.dice && this.dice.update) {
+      this.dice.update(time, delta);
+    }
   }
 }

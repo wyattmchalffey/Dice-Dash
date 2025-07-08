@@ -1,3 +1,5 @@
+import { SOCKET_EVENTS } from '../../shared/constants/Events.js';
+
 export default class Player {
   constructor(scene, id, name, x, y, color = 0xff6b6b) {
     this.scene = scene;
@@ -61,16 +63,68 @@ export default class Player {
     });
   }
 
+  moveTo(targetX, targetY, callback) {
+    if (this.isMoving) return;
+    
+    this.isMoving = true;
+    
+    // Update position
+    this.x = targetX;
+    this.y = targetY;
+    
+    // Animate all player elements to the new position
+    this.scene.tweens.add({
+      targets: [this.sprite, this.nameText, this.coinText, this.initialText],
+      x: targetX,
+      y: {
+        value: (target) => {
+          if (target === this.sprite) return targetY;
+          if (target === this.initialText) return targetY;
+          if (target === this.nameText) return targetY - 28;
+          if (target === this.coinText) return targetY + 28;
+        }
+      },
+      duration: 500,
+      ease: 'Power2',
+      onComplete: () => {
+        this.isMoving = false;
+        if (callback) callback();
+      }
+    });
+  }
+
   moveAlongPath(path, board) {
     if (this.isMoving || path.length === 0) return;
     
     this.isMoving = true;
     
-    // Create tween chain for movement
-    const timeline = this.scene.tweens.createTimeline();
+    // Move through each space in sequence
+    let currentIndex = 0;
     
-    path.forEach((space, index) => {
-      timeline.add({
+    const moveToNextSpace = () => {
+      if (currentIndex >= path.length) {
+        // Movement complete
+        this.isMoving = false;
+        
+        // Emit movement complete event
+        if (this.scene.socketManager && typeof this.scene.socketManager.emit === 'function') {
+          this.scene.socketManager.emit(SOCKET_EVENTS.PLAYER_MOVED, {
+            playerId: this.id,
+            position: this.currentSpace
+          });
+        }
+        return;
+      }
+      
+      const space = path[currentIndex];
+      this.currentSpace = space.index;
+      
+      // Update position
+      this.x = space.x;
+      this.y = space.y;
+      
+      // Animate to the space
+      this.scene.tweens.add({
         targets: [this.sprite, this.nameText, this.coinText, this.initialText],
         x: space.x,
         y: {
@@ -84,153 +138,76 @@ export default class Player {
         duration: 300,
         ease: 'Power2',
         onComplete: () => {
-          this.currentSpace = space.index;
-          space.playLandAnimation();
+          // Play land animation
+          if (space.playLandAnimation) {
+            space.playLandAnimation();
+          }
           
-          // Bounce effect on each space
-          this.scene.tweens.add({
-            targets: this.sprite,
-            scale: { from: 1, to: 1.2 },
-            duration: 150,
-            yoyo: true
-          });
+          // Move to next space
+          currentIndex++;
+          moveToNextSpace();
         }
       });
-    });
+    };
     
-    timeline.on('complete', () => {
-      this.isMoving = false;
-      this.x = path[path.length - 1].x;
-      this.y = path[path.length - 1].y;
-    });
-    
-    timeline.play();
+    // Start movement
+    moveToNextSpace();
   }
 
-  moveTo(x, y, duration = 500) {
-    this.scene.tweens.add({
-      targets: [this.sprite, this.nameText, this.coinText, this.initialText],
-      x: x,
-      y: {
-        value: (target) => {
-          if (target === this.sprite) return y;
-          if (target === this.initialText) return y;
-          if (target === this.nameText) return y - 28;
-          if (target === this.coinText) return y + 28;
-        }
-      },
-      duration: duration,
-      ease: 'Power2',
-      onComplete: () => {
-        this.x = x;
-        this.y = y;
-      }
-    });
-  }
-
-  updateCoins(newAmount) {
-    const oldAmount = this.coins;
-    this.coins = newAmount;
-    
-    // Animate coin change
-    const diff = newAmount - oldAmount;
-    if (diff !== 0) {
-      // Show floating text
-      const floatingText = this.scene.add.text(this.x, this.y, diff > 0 ? `+${diff}` : diff.toString(), {
-        fontSize: '24px',
-        fontFamily: 'Arial',
-        color: diff > 0 ? '#4caf50' : '#f44336',
-        fontStyle: 'bold'
-      }).setOrigin(0.5);
-      
-      this.scene.tweens.add({
-        targets: floatingText,
-        y: this.y - 60,
-        alpha: 0,
-        duration: 1500,
-        onComplete: () => floatingText.destroy()
-      });
-    }
-    
-    // Update coin display
+  updateCoins(amount) {
+    this.coins = amount;
     this.coinText.setText(`🪙 ${this.coins}`);
     
-    // Pulse effect
+    // Coin update animation
     this.scene.tweens.add({
       targets: this.coinText,
-      scale: { from: 1, to: 1.3 },
+      scale: { from: 1, to: 1.2 },
       duration: 200,
-      yoyo: true
+      yoyo: true,
+      ease: 'Power2'
     });
   }
 
-  setActive(active) {
-    if (active) {
-      // Add glow effect
-      this.glowEffect = this.scene.add.circle(this.x, this.y, 24, this.color, 0.5);
-      this.scene.tweens.add({
-        targets: this.glowEffect,
-        scale: { from: 0.8, to: 1.3 },
-        alpha: { from: 0.8, to: 0.2 },
-        duration: 1000,
-        yoyo: true,
-        repeat: -1
-      });
-      
-      // Move glow behind sprite
-      this.scene.children.moveTo(this.glowEffect, this.scene.children.getIndex(this.sprite) - 1);
+  highlight(enabled = true) {
+    if (enabled) {
+      this.sprite.setStrokeStyle(4, 0xffff00);
     } else {
-      if (this.glowEffect) {
-        this.glowEffect.destroy();
-        this.glowEffect = null;
-      }
+      this.sprite.setStrokeStyle(2, 0x000000);
     }
+  }
+
+  setEnergy(current, max) {
+    // Store energy values if needed
+    this.energy = current;
+    this.maxEnergy = max;
   }
 
   playEmote(emoteType) {
-    const emotes = {
-      happy: '😊',
-      sad: '😢',
-      angry: '😠',
-      laugh: '😂',
-      think: '🤔'
-    };
-    
-    const emote = emotes[emoteType] || '❓';
-    
-    const emoteText = this.scene.add.text(this.x, this.y - 50, emote, {
-      fontSize: '32px'
+    // Create emote bubble above player
+    const emote = this.scene.add.text(this.x, this.y - 50, emoteType, {
+      fontSize: '24px',
+      fontFamily: 'Arial'
     }).setOrigin(0.5);
     
+    // Animate emote
     this.scene.tweens.add({
-      targets: emoteText,
-      y: this.y - 80,
-      scale: { from: 0, to: 1 },
-      duration: 500,
-      ease: 'Back.easeOut',
-      onComplete: () => {
-        this.scene.time.delayedCall(2000, () => {
-          this.scene.tweens.add({
-            targets: emoteText,
-            alpha: 0,
-            scale: 0,
-            duration: 300,
-            onComplete: () => emoteText.destroy()
-          });
-        });
-      }
+      targets: emote,
+      y: this.y - 70,
+      alpha: { from: 1, to: 0 },
+      duration: 1500,
+      onComplete: () => emote.destroy()
     });
   }
 
-  update(time, delta) {
-    // Update animations or states if needed
-  }
-
   destroy() {
+    // Clean up all game objects
     if (this.sprite) this.sprite.destroy();
     if (this.nameText) this.nameText.destroy();
     if (this.coinText) this.coinText.destroy();
     if (this.initialText) this.initialText.destroy();
-    if (this.glowEffect) this.glowEffect.destroy();
+  }
+
+  update(time, delta) {
+    // Update method for any per-frame logic if needed
   }
 }
