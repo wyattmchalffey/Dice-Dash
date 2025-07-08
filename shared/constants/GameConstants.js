@@ -1,7 +1,7 @@
 // Game configuration constants shared between client and server
 export const GAME_CONFIG = {
   MAX_PLAYERS_PER_BOARD: 200,
-  MIN_PLAYERS_TO_START: 2,
+  MIN_PLAYERS_TO_START: 1,
   DEFAULT_ENERGY: 5,
   MAX_ENERGY: 5,
   ENERGY_REGEN_TIME: 20 * 60 * 1000, // 20 minutes in milliseconds

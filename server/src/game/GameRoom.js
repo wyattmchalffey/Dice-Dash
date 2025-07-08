@@ -105,8 +105,16 @@ export class GameRoom {
     }
     
     // Use energy
-    player.useEnergy(GAME_CONFIG.ENERGY_COST_PER_TURN);
-    
+      player.useEnergy(GAME_CONFIG.ENERGY_COST_PER_TURN);
+
+    // Broadcast energy update immediately after using energy
+      this.broadcast(SOCKET_EVENTS.ENERGY_UPDATED, {
+          playerId: playerId,
+          currentEnergy: player.energy,
+          maxEnergy: GAME_CONFIG.MAX_ENERGY
+      });
+
+
     // Roll dice
     const diceResult = rollDice();
     
