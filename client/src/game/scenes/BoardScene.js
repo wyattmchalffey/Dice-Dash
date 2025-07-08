@@ -119,12 +119,12 @@ export default class BoardScene extends Phaser.Scene {
     const { width, height } = this.cameras.main;
     
     // Top bar - Energy and Coins
-    const topBarY = 30;
+    const topBarY = 40;
     
-    // Energy display (top-left)
-    this.uiElements.energyContainer = this.add.container(50, topBarY);
-    this.uiElements.energyTitle = this.add.text(0, -10, 'Energy', {
-      fontSize: '18px',
+    // Energy display (top-left) - Moved down and right to avoid overlap
+    this.uiElements.energyContainer = this.add.container(80, topBarY);
+    this.uiElements.energyTitle = this.add.text(0, -15, 'Energy', {
+      fontSize: '16px',
       fontFamily: 'Arial',
       color: '#333333',
       fontStyle: 'bold'
@@ -133,7 +133,8 @@ export default class BoardScene extends Phaser.Scene {
     // Energy bars
     this.uiElements.energyBars = [];
     for (let i = 0; i < 5; i++) {
-      const bar = this.add.rectangle(i * 25, 10, 20, 15, 0xffcc00);
+      const bar = this.add.rectangle(i * 22, 10, 18, 14, 0xffcc00);
+      bar.setStrokeStyle(1, 0x333333);
       this.uiElements.energyBars.push(bar);
       this.uiElements.energyContainer.add(bar);
     }
@@ -156,33 +157,35 @@ export default class BoardScene extends Phaser.Scene {
       fontStyle: 'bold'
     }).setOrigin(1, 0.5);
     
-    // Players list (left side)
-    const playersX = 50;
-    const playersY = 150;
+    // Players list (left side) - Adjusted position and size
+    const playersX = 80;
+    const playersY = 200;
+    const playersWidth = 160;
+    const playersHeight = 250;
     
-    const playersBg = this.add.rectangle(playersX, playersY, 200, 300, 0xffffff, 0.9);
+    const playersBg = this.add.rectangle(playersX, playersY, playersWidth, playersHeight, 0xffffff, 0.9);
     playersBg.setStrokeStyle(2, 0x333333);
     
-    this.uiElements.playersTitle = this.add.text(playersX, playersY - 130, 'Players', {
-      fontSize: '20px',
+    this.uiElements.playersTitle = this.add.text(playersX, playersY - playersHeight/2 + 20, 'Players', {
+      fontSize: '18px',
       fontFamily: 'Arial',
       color: '#333333',
       fontStyle: 'bold'
     }).setOrigin(0.5);
     
-    this.uiElements.playersList = this.add.container(playersX - 80, playersY - 100);
+    this.uiElements.playersList = this.add.container(playersX - playersWidth/2 + 20, playersY - playersHeight/2 + 50);
     this.uiElements.playersContainer = this.add.container(0, 0);
     this.uiElements.playersContainer.add([playersBg, this.uiElements.playersTitle, this.uiElements.playersList]);
     
-    // Dice and Roll button (bottom-center) - FIXED POSITIONING
+    // Dice and Roll button (bottom-center) - Better spacing
     const bottomY = height - 80;
     
-    // Create dice BEFORE creating UI elements that reference it
-    this.dice = new Dice(this, width / 2 - 80, bottomY);
+    // Create dice with more space from button
+    this.dice = new Dice(this, width / 2 - 120, bottomY);
     this.dice.create();
     
-    // Roll button
-    this.uiElements.rollButton = this.add.image(width / 2 + 40, bottomY, 'button_red')
+    // Roll button with adjusted position
+    this.uiElements.rollButton = this.add.image(width / 2 + 60, bottomY, 'button_red')
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => {
         console.log('Roll button clicked!');
@@ -191,8 +194,8 @@ export default class BoardScene extends Phaser.Scene {
       .on('pointerover', () => this.uiElements.rollButton.setTint(0xcccccc))
       .on('pointerout', () => this.uiElements.rollButton.clearTint());
     
-    this.uiElements.rollButtonText = this.add.text(width / 2 + 40, bottomY, 'Roll Dice', {
-      fontSize: '20px',
+    this.uiElements.rollButtonText = this.add.text(width / 2 + 60, bottomY, 'Roll Dice', {
+      fontSize: '18px',
       fontFamily: 'Arial',
       color: '#ffffff',
       fontStyle: 'bold'
@@ -232,26 +235,37 @@ export default class BoardScene extends Phaser.Scene {
   createPlayer(playerData) {
     console.log('Creating player:', playerData);
     
-    const startSpace = this.board.getSpace(0);
-    if (!startSpace) {
-      console.error('Could not find start space');
+    // Determine the correct space position
+    const spaceIndex = playerData.position || 0;
+    const targetSpace = this.board.getSpace(spaceIndex);
+    if (!targetSpace) {
+      console.error('Could not find space at index:', spaceIndex);
       return;
     }
+    
+    console.log(`Creating player at space ${spaceIndex} (${targetSpace.x}, ${targetSpace.y})`);
     
     const player = new Player(
       this,
       playerData.id,
       playerData.name,
-      startSpace.x,
-      startSpace.y,
+      targetSpace.x,
+      targetSpace.y,
       playerData.color || 0xff6b6b
     );
+    
+    // Set the correct current space
+    player.currentSpace = spaceIndex;
     
     this.players.set(playerData.id, player);
     
     // Update player state with data
     if (playerData.coins !== undefined) {
       player.updateCoins(playerData.coins);
+    }
+    
+    if (playerData.energy !== undefined) {
+      player.setEnergy(playerData.energy, playerData.maxEnergy || 5);
     }
     
     // Update players list UI
@@ -270,11 +284,12 @@ export default class BoardScene extends Phaser.Scene {
       const playerItem = this.add.container(0, yOffset);
       
       // Player color indicator
-      const colorIndicator = this.add.circle(0, 0, 10, player.color);
+      const colorIndicator = this.add.circle(0, 0, 8, player.color);
+      colorIndicator.setStrokeStyle(1, 0x333333);
       
-      // Player name
+      // Player name - with smaller font
       const nameText = this.add.text(20, 0, player.name, {
-        fontSize: '16px',
+        fontSize: '14px',
         fontFamily: 'Arial',
         color: '#333333'
       }).setOrigin(0, 0.5);
@@ -282,12 +297,26 @@ export default class BoardScene extends Phaser.Scene {
       // Current player indicator
       if (player.id === this.currentPlayerId) {
         nameText.setStyle({ fontStyle: 'bold', color: '#ff6b6b' });
+        
+        // Add arrow indicator
+        const arrow = this.add.text(-15, 0, '▶', {
+          fontSize: '12px',
+          color: '#ff6b6b'
+        }).setOrigin(0.5);
+        playerItem.add(arrow);
       }
       
-      playerItem.add([colorIndicator, nameText]);
+      // Add coins display
+      const coinsText = this.add.text(100, 0, `🪙${player.coins}`, {
+        fontSize: '12px',
+        fontFamily: 'Arial',
+        color: '#666666'
+      }).setOrigin(0, 0.5);
+      
+      playerItem.add([colorIndicator, nameText, coinsText]);
       this.uiElements.playersList.add(playerItem);
       
-      yOffset += 30;
+      yOffset += 25;
     });
   }
 
