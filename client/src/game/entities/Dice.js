@@ -9,9 +9,9 @@ export default class Dice {
   }
 
   create() {
-    // Create dice sprite
+    // Create dice sprite (smaller size)
     this.diceSprite = this.scene.add.image(this.x, this.y, 'dice_1');
-    this.diceSprite.setScale(1.5);
+    this.diceSprite.setScale(1);
     
     // Return this for chaining
     return this;
@@ -51,7 +51,7 @@ export default class Dice {
           // Bounce effect
           this.scene.tweens.add({
             targets: this.diceSprite,
-            scale: { from: 1.5, to: 2 },
+            scale: { from: 1, to: 1.3 },
             duration: 200,
             yoyo: true,
             ease: 'Power2',

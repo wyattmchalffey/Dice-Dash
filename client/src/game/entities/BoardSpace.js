@@ -15,22 +15,22 @@ export default class BoardSpace {
   create() {
     const config = SPACE_CONFIG[this.type];
     
-    // Create space graphic
-    this.graphics = this.scene.add.circle(this.x, this.y, 35, config.color);
-    this.graphics.setStrokeStyle(3, 0x333333);
+    // Create space graphic (smaller size)
+    this.graphics = this.scene.add.circle(this.x, this.y, 28, config.color);
+    this.graphics.setStrokeStyle(2, 0x333333);
     
     // Add space icon/text
     this.icon = this.scene.add.text(this.x, this.y, config.icon, {
-      fontSize: '20px',
+      fontSize: '16px',
       fontFamily: 'Arial',
       color: '#ffffff',
       fontStyle: 'bold'
     }).setOrigin(0.5);
     
-    // Add space number (for debugging)
+    // Add space number (for debugging) - smaller font
     if (this.index > 0) { // Don't show on START space
-      this.scene.add.text(this.x, this.y + 45, this.index.toString(), {
-        fontSize: '12px',
+      this.scene.add.text(this.x, this.y + 38, this.index.toString(), {
+        fontSize: '10px',
         fontFamily: 'Arial',
         color: '#666666'
       }).setOrigin(0.5);
@@ -47,13 +47,13 @@ export default class BoardSpace {
     const config = SPACE_CONFIG[this.type];
     
     if (!this.tooltip) {
-      this.tooltip = this.scene.add.container(this.x, this.y - 70);
+      this.tooltip = this.scene.add.container(this.x, this.y - 55);
       
-      const bg = this.scene.add.rectangle(0, 0, 150, 40, 0x000000, 0.8)
+      const bg = this.scene.add.rectangle(0, 0, 140, 35, 0x000000, 0.8)
         .setStrokeStyle(1, 0xffffff);
       
       const text = this.scene.add.text(0, 0, config.description, {
-        fontSize: '14px',
+        fontSize: '12px',
         fontFamily: 'Arial',
         color: '#ffffff',
         align: 'center'
@@ -73,7 +73,7 @@ export default class BoardSpace {
 
   highlight() {
     if (!this.highlightGraphics) {
-      this.highlightGraphics = this.scene.add.circle(this.x, this.y, 45, 0xffff00, 0.5);
+      this.highlightGraphics = this.scene.add.circle(this.x, this.y, 38, 0xffff00, 0.5);
       this.scene.tweens.add({
         targets: this.highlightGraphics,
         scale: { from: 0.8, to: 1.2 },

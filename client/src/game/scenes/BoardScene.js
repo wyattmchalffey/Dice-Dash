@@ -71,14 +71,17 @@ export default class BoardScene extends Phaser.Scene {
   createUI() {
     const { width, height } = this.cameras.main;
     
-    // Energy display
-    this.uiElements.energyContainer = this.add.container(20, 20);
-    const energyBg = this.add.rectangle(0, 0, 200, 80, 0xffffff, 0.9)
+    // Top bar - Energy and Coins
+    const topBarY = 30;
+    
+    // Energy display (top-left)
+    this.uiElements.energyContainer = this.add.container(20, topBarY);
+    const energyBg = this.add.rectangle(0, 0, 200, 60, 0xffffff, 0.9)
       .setOrigin(0)
       .setStrokeStyle(2, 0x333333);
     
-    this.uiElements.energyText = this.add.text(10, 10, 'Energy: 5/5', {
-      fontSize: '18px',
+    this.uiElements.energyText = this.add.text(10, 8, 'Energy: 5/5', {
+      fontSize: '16px',
       fontFamily: 'Arial',
       color: '#333333',
       fontStyle: 'bold'
@@ -86,7 +89,7 @@ export default class BoardScene extends Phaser.Scene {
     
     this.uiElements.energyBars = [];
     for (let i = 0; i < 5; i++) {
-      const bar = this.add.rectangle(10 + i * 35, 40, 30, 20, 0xffcc00)
+      const bar = this.add.rectangle(10 + i * 35, 35, 30, 15, 0xffcc00)
         .setOrigin(0)
         .setStrokeStyle(2, 0xff9900);
       this.uiElements.energyBars.push(bar);
@@ -94,13 +97,13 @@ export default class BoardScene extends Phaser.Scene {
     
     this.uiElements.energyContainer.add([energyBg, this.uiElements.energyText, ...this.uiElements.energyBars]);
     
-    // Coins display
-    this.uiElements.coinsContainer = this.add.container(width - 200, 20);
-    const coinsBg = this.add.rectangle(0, 0, 180, 60, 0xffffff, 0.9)
+    // Coins display (top-right)
+    this.uiElements.coinsContainer = this.add.container(width - 180, topBarY);
+    const coinsBg = this.add.rectangle(0, 0, 160, 60, 0xffffff, 0.9)
       .setOrigin(0)
       .setStrokeStyle(2, 0x333333);
     
-    this.uiElements.coinsText = this.add.text(10, 15, '🪙 0', {
+    this.uiElements.coinsText = this.add.text(10, 20, '🪙 0', {
       fontSize: '24px',
       fontFamily: 'Arial',
       color: '#ff9900',
@@ -109,9 +112,18 @@ export default class BoardScene extends Phaser.Scene {
     
     this.uiElements.coinsContainer.add([coinsBg, this.uiElements.coinsText]);
     
-    // Players list
-    this.uiElements.playersContainer = this.add.container(width - 200, 100);
-    const playersBg = this.add.rectangle(0, 0, 180, 200, 0xffffff, 0.9)
+    // Turn indicator (top-center)
+    this.uiElements.turnIndicator = this.add.text(width / 2, topBarY + 20, '', {
+      fontSize: '22px',
+      fontFamily: 'Arial',
+      color: '#ffffff',
+      stroke: '#333333',
+      strokeThickness: 4
+    }).setOrigin(0.5);
+    
+    // Players list (right side)
+    this.uiElements.playersContainer = this.add.container(width - 180, height / 2 - 100);
+    const playersBg = this.add.rectangle(0, 0, 160, 200, 0xffffff, 0.9)
       .setOrigin(0)
       .setStrokeStyle(2, 0x333333);
     
@@ -125,27 +137,25 @@ export default class BoardScene extends Phaser.Scene {
     this.uiElements.playersList = this.add.container(10, 40);
     this.uiElements.playersContainer.add([playersBg, this.uiElements.playersTitle, this.uiElements.playersList]);
     
+    // Dice and Roll button (bottom-center)
+    const bottomY = height - 60;
+    
+    // Dice display
+    this.dice = new Dice(this, width / 2 - 80, bottomY);
+    this.dice.create();
+    
     // Roll button
-    this.uiElements.rollButton = this.add.image(width / 2, height - 80, 'button_red')
+    this.uiElements.rollButton = this.add.image(width / 2 + 40, bottomY, 'button_red')
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.rollDice())
       .on('pointerover', () => this.uiElements.rollButton.setTint(0xcccccc))
       .on('pointerout', () => this.uiElements.rollButton.clearTint());
     
-    this.uiElements.rollButtonText = this.add.text(width / 2, height - 80, 'Roll Dice', {
-      fontSize: '24px',
+    this.uiElements.rollButtonText = this.add.text(width / 2 + 40, bottomY, 'Roll Dice', {
+      fontSize: '20px',
       fontFamily: 'Arial',
       color: '#ffffff',
       fontStyle: 'bold'
-    }).setOrigin(0.5);
-    
-    // Turn indicator
-    this.uiElements.turnIndicator = this.add.text(width / 2, 30, '', {
-      fontSize: '24px',
-      fontFamily: 'Arial',
-      color: '#ffffff',
-      stroke: '#333333',
-      strokeThickness: 4
     }).setOrigin(0.5);
   }
 
@@ -251,10 +261,17 @@ export default class BoardScene extends Phaser.Scene {
   }
 
   setupCamera() {
-    // Enable camera controls
-    this.cameras.main.setBounds(0, 0, this.board.boardWidth, this.board.boardHeight);
+    // Set camera bounds to match the game area
+    this.cameras.main.setBounds(0, 0, 1200, 800);
     
-    // Mouse wheel zoom
+    // Center the camera on the board
+    this.cameras.main.centerOn(600, 400);
+    
+    // Disable zoom for now to keep UI consistent
+    // If you want zoom, you'll need to separate UI into a fixed camera
+    
+    // Mouse wheel zoom (commented out for now)
+    /*
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
       const zoom = this.cameras.main.zoom;
       if (deltaY > 0) {
@@ -263,8 +280,10 @@ export default class BoardScene extends Phaser.Scene {
         this.cameras.main.setZoom(Math.min(2, zoom + 0.1));
       }
     });
+    */
     
-    // Drag to pan
+    // Drag to pan (disabled for now)
+    /*
     let dragStart = null;
     this.input.on('pointerdown', (pointer) => {
       if (pointer.rightButtonDown()) {
@@ -283,6 +302,7 @@ export default class BoardScene extends Phaser.Scene {
     this.input.on('pointerup', () => {
       dragStart = null;
     });
+    */
   }
 
   rollDice() {

@@ -20,35 +20,35 @@ export default class Player {
   }
 
   create() {
-    // Create player sprite
-    this.sprite = this.scene.add.circle(this.x, this.y, 20, this.color);
-    this.sprite.setStrokeStyle(3, 0x000000);
+    // Create player sprite (smaller size)
+    this.sprite = this.scene.add.circle(this.x, this.y, 16, this.color);
+    this.sprite.setStrokeStyle(2, 0x000000);
     
     // Add player number or initial
     const initial = this.name.charAt(0).toUpperCase();
     this.initialText = this.scene.add.text(this.x, this.y, initial, {
-      fontSize: '16px',
+      fontSize: '12px',
       fontFamily: 'Arial',
       color: '#ffffff',
       fontStyle: 'bold'
     }).setOrigin(0.5);
     
     // Create name label
-    this.nameText = this.scene.add.text(this.x, this.y - 35, this.name, {
-      fontSize: '14px',
+    this.nameText = this.scene.add.text(this.x, this.y - 28, this.name, {
+      fontSize: '12px',
       fontFamily: 'Arial',
       color: '#ffffff',
       backgroundColor: '#333333',
-      padding: { x: 5, y: 2 }
+      padding: { x: 4, y: 2 }
     }).setOrigin(0.5);
     
     // Create coin display
-    this.coinText = this.scene.add.text(this.x, this.y + 35, `🪙 ${this.coins}`, {
-      fontSize: '12px',
+    this.coinText = this.scene.add.text(this.x, this.y + 28, `🪙 ${this.coins}`, {
+      fontSize: '10px',
       fontFamily: 'Arial',
       color: '#ffcc00',
       backgroundColor: '#333333',
-      padding: { x: 5, y: 2 }
+      padding: { x: 4, y: 2 }
     }).setOrigin(0.5);
     
     // Entrance animation
@@ -77,8 +77,8 @@ export default class Player {
           value: (target) => {
             if (target === this.sprite) return space.y;
             if (target === this.initialText) return space.y;
-            if (target === this.nameText) return space.y - 35;
-            if (target === this.coinText) return space.y + 35;
+            if (target === this.nameText) return space.y - 28;
+            if (target === this.coinText) return space.y + 28;
           }
         },
         duration: 300,
@@ -115,8 +115,8 @@ export default class Player {
         value: (target) => {
           if (target === this.sprite) return y;
           if (target === this.initialText) return y;
-          if (target === this.nameText) return y - 35;
-          if (target === this.coinText) return y + 35;
+          if (target === this.nameText) return y - 28;
+          if (target === this.coinText) return y + 28;
         }
       },
       duration: duration,
@@ -167,7 +167,7 @@ export default class Player {
   setActive(active) {
     if (active) {
       // Add glow effect
-      this.glowEffect = this.scene.add.circle(this.x, this.y, 30, this.color, 0.5);
+      this.glowEffect = this.scene.add.circle(this.x, this.y, 24, this.color, 0.5);
       this.scene.tweens.add({
         targets: this.glowEffect,
         scale: { from: 0.8, to: 1.3 },
