@@ -115,7 +115,17 @@ export default class BoardScene extends Phaser.Scene {
       this.uiElements.energyContainer.add(bar);
     }
     
-    this.uiElements.energyContainer.add([this.uiElements.energyTitle, ...this.uiElements.energyBars]);
+    // Energy timer text (shows time until next energy)
+    this.uiElements.energyTimer = this.add.text(0, 25, '', {
+      fontSize: '12px',
+      fontFamily: 'Arial',
+      color: '#666666'
+    }).setOrigin(0, 0.5);
+    
+    this.uiElements.energyContainer.add([this.uiElements.energyTitle, this.uiElements.energyTimer, ...this.uiElements.energyBars]);
+    
+    // Start energy timer
+    this.startEnergyTimer();
     
     // Coins display (top-center)
     this.uiElements.coinsText = this.add.text(width / 2, topBarY, '🪙 10', {
@@ -746,6 +756,34 @@ export default class BoardScene extends Phaser.Scene {
       duration: 200,
       yoyo: true,
       ease: 'Power2'
+    });
+  }
+
+  startEnergyTimer() {
+    // Update energy timer every second
+    this.time.addEvent({
+      delay: 1000,
+      callback: () => {
+        const myPlayerId = this.roomData?.playerId || this.playerData?.id || 'demo-player';
+        const myPlayer = this.players.get(myPlayerId);
+        
+        if (myPlayer && myPlayer.energy < 5) {
+          // Calculate time until next energy
+          const regenTime = 20; // 20 seconds in demo mode
+          const currentTime = Math.floor(Date.now() / 1000);
+          const timeUntilNext = regenTime - (currentTime % regenTime);
+          
+          // Format as MM:SS
+          const minutes = Math.floor(timeUntilNext / 60);
+          const seconds = timeUntilNext % 60;
+          const timeText = `Next: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+          
+          this.uiElements.energyTimer.setText(timeText);
+        } else {
+          this.uiElements.energyTimer.setText('Full');
+        }
+      },
+      loop: true
     });
   }
 

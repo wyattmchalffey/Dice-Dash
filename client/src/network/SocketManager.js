@@ -126,6 +126,12 @@ export class SocketManager {
       this.emitLocal(SOCKET_EVENTS.ENERGY_UPDATED, data);
     });
 
+    // Energy regenerated event
+    this.socket.on(SOCKET_EVENTS.ENERGY_REGENERATED, (data) => {
+      console.log('Energy regenerated event:', data);
+      this.emitLocal(SOCKET_EVENTS.ENERGY_REGENERATED, data);
+    });
+
     this.socket.on(SOCKET_EVENTS.COINS_UPDATED, (data) => {
       console.log('Coins updated event:', data);
       this.emitLocal(SOCKET_EVENTS.COINS_UPDATED, data);

@@ -1,5 +1,7 @@
+// Complete GameRoom.js without turn system
+// server/src/game/GameRoom.js
+
 import { BoardState } from './BoardState.js';
-import { TurnManager } from './TurnManager.js';
 import { Player } from '../models/Player.js';
 import { GAME_CONFIG, GAME_STATES } from '../../../shared/constants/GameConstants.js';
 import { SOCKET_EVENTS } from '../../../shared/constants/Events.js';
@@ -13,7 +15,7 @@ export class GameRoom {
     this.players = new Map(); // playerId -> Player
     this.sockets = new Map(); // playerId -> socket
     this.boardState = new BoardState();
-    this.turnManager = new TurnManager();
+    // REMOVED: TurnManager
     this.state = GAME_STATES.WAITING_FOR_PLAYERS;
     this.createdAt = Date.now();
     this.lastActivityAt = Date.now();
@@ -63,33 +65,27 @@ export class GameRoom {
       playerName: player.name
     });
     
-    // Handle turn change if it was this player's turn
-    if (this.turnManager.isCurrentPlayer(playerId)) {
-      this.nextTurn();
-    }
-    
     this.updateActivity();
   }
 
-    // Update startGame method to not initialize turns:
-    startGame() {
-        this.state = GAME_STATES.IN_PROGRESS;
-        this.broadcast(SOCKET_EVENTS.GAME_STATE_UPDATE, {
-            state: this.state
-        });
-
-        console.log(`Game started in room ${this.id} with ${this.players.size} players`);
-    }
+  // Start the game
+  startGame() {
+    this.state = GAME_STATES.IN_PROGRESS;
+    
+    // Notify all players
+    this.broadcast(SOCKET_EVENTS.GAME_STATE_UPDATE, {
+      state: this.state
+    });
+    
+    console.log(`Game started in room ${this.id} with ${this.players.size} players`);
+  }
 
   // Handle dice roll
   async handleRollDice(playerId) {
     const player = this.players.get(playerId);
     if (!player) throw new Error('Player not found');
     
-    // REMOVED: Turn validation
-    // Now any player can roll as long as they have energy
-    
-    // Check energy
+    // Check energy (no turn validation needed)
     if (!player.hasEnergy(GAME_CONFIG.ENERGY_COST_PER_TURN)) {
       throw new Error('Insufficient energy');
     }
@@ -168,13 +164,8 @@ export class GameRoom {
     // Handle special actions
     if (result.action === 'start_minigame') {
       await this.startMinigame(playerId);
-    } else if (result.action === 'warp') {
-      // TODO: Implement warp logic
-      this.nextTurn();
-    } else {
-      // End turn
-      this.nextTurn();
     }
+    // No turn ending needed - players can roll again when they have energy
   }
 
   // Start a minigame
@@ -225,33 +216,6 @@ export class GameRoom {
       score: result.score,
       reward: reward
     });
-    
-    // End turn
-    this.nextTurn();
-  }
-
-  // Move to next turn
-  nextTurn() {
-    const nextPlayerId = this.turnManager.nextTurn();
-    
-    // Skip disconnected players
-    let attempts = 0;
-    while (attempts < this.players.size) {
-      const player = this.players.get(nextPlayerId);
-      if (player && !player.isDisconnected) {
-        break;
-      }
-      nextPlayerId = this.turnManager.nextTurn();
-      attempts++;
-    }
-    
-    // Broadcast next turn
-    this.broadcast(SOCKET_EVENTS.NEXT_TURN, {
-      currentPlayer: nextPlayerId,
-      turnNumber: this.turnManager.turnNumber
-    });
-    
-    this.updateActivity();
   }
 
   // Handle chat message
@@ -286,22 +250,27 @@ export class GameRoom {
 
   // Start energy regeneration timer
   startEnergyRegeneration() {
-    setInterval(() => {
+    this.energyRegenInterval = setInterval(() => {
+      console.log('Energy regeneration tick - checking players...');
+      
       for (const [playerId, player] of this.players) {
         if (player.energy < GAME_CONFIG.MAX_ENERGY) {
+          const oldEnergy = player.energy;
           player.addEnergy(1);
           
-          // Notify player of energy regen
-          const socket = this.sockets.get(playerId);
-          if (socket) {
-            socket.emit(SOCKET_EVENTS.ENERGY_REGENERATED, {
-              currentEnergy: player.energy,
-              maxEnergy: GAME_CONFIG.MAX_ENERGY
-            });
-          }
+          console.log(`Player ${player.name} energy: ${oldEnergy} -> ${player.energy}`);
+          
+          // Broadcast to ALL players in the room
+          this.broadcast(SOCKET_EVENTS.ENERGY_REGENERATED, {
+            playerId: playerId,
+            currentEnergy: player.energy,
+            maxEnergy: GAME_CONFIG.MAX_ENERGY
+          });
         }
       }
     }, GAME_CONFIG.DEMO_MODE ? GAME_CONFIG.DEMO_ENERGY_REGEN_TIME : GAME_CONFIG.ENERGY_REGEN_TIME);
+    
+    console.log(`Energy regeneration started with interval: ${GAME_CONFIG.DEMO_MODE ? GAME_CONFIG.DEMO_ENERGY_REGEN_TIME : GAME_CONFIG.ENERGY_REGEN_TIME}ms`);
   }
 
   // Broadcast to all players in room
@@ -323,8 +292,6 @@ export class GameRoom {
       roomId: this.id,
       state: this.state,
       players: players,
-      currentPlayer: this.turnManager.getCurrentPlayer(),
-      turnNumber: this.turnManager.turnNumber,
       board: this.boardState.getBoardData()
     };
   }
@@ -347,5 +314,13 @@ export class GameRoom {
   // Check if waiting for players
   isWaitingForPlayers() {
     return this.state === GAME_STATES.WAITING_FOR_PLAYERS;
+  }
+  
+  // Clean up when room is destroyed
+  destroy() {
+    if (this.energyRegenInterval) {
+      clearInterval(this.energyRegenInterval);
+      this.energyRegenInterval = null;
+    }
   }
 }
