@@ -9,8 +9,6 @@ export default class BoardScene extends Phaser.Scene {
   constructor() {
     super({ key: 'BoardScene' });
     this.players = new Map();
-    this.currentPlayerId = null;
-    this.isMyTurn = false;
     this.board = null;
     this.dice = null;
     this.uiElements = {};
@@ -77,29 +75,7 @@ export default class BoardScene extends Phaser.Scene {
       this.createPlayer(demoPlayer);
     }
     
-    // Set current player - IMPORTANT FIX HERE
-    if (this.roomData && this.roomData.gameState && this.roomData.gameState.currentPlayer) {
-      // Use the server's current player
-      this.currentPlayerId = this.roomData.gameState.currentPlayer;
-      this.isMyTurn = (this.currentPlayerId === (this.roomData?.playerId || this.playerData?.id));
-    } else if (this.roomData?.playerId) {
-      // Use the player ID from join response
-      this.currentPlayerId = this.roomData.playerId;
-      this.isMyTurn = true;
-    } else if (this.playerData) {
-      this.currentPlayerId = this.playerData.id;
-      this.isMyTurn = true;
-    } else {
-      // Demo mode - set first player as current
-      const firstPlayer = this.players.values().next().value;
-      if (firstPlayer) {
-        this.currentPlayerId = firstPlayer.id;
-        this.isMyTurn = true;
-      }
-    }
-    
-    console.log('Current player ID:', this.currentPlayerId);
-    console.log('Is my turn:', this.isMyTurn);
+    // No more turn-based logic needed
     console.log('Available players:', Array.from(this.players.keys()));
     
     this.updateTurnIndicator();
@@ -294,18 +270,6 @@ export default class BoardScene extends Phaser.Scene {
         color: '#333333'
       }).setOrigin(0, 0.5);
       
-      // Current player indicator
-      if (player.id === this.currentPlayerId) {
-        nameText.setStyle({ fontStyle: 'bold', color: '#ff6b6b' });
-        
-        // Add arrow indicator
-        const arrow = this.add.text(-15, 0, '▶', {
-          fontSize: '12px',
-          color: '#ff6b6b'
-        }).setOrigin(0.5);
-        playerItem.add(arrow);
-      }
-      
       // Add coins display
       const coinsText = this.add.text(100, 0, `🪙${player.coins}`, {
         fontSize: '12px',
@@ -321,11 +285,18 @@ export default class BoardScene extends Phaser.Scene {
   }
 
   updateTurnIndicator() {
-    const currentPlayer = this.players.get(this.currentPlayerId);
-    if (currentPlayer) {
-      const text = this.isMyTurn ? 'Your Turn!' : `${currentPlayer.name}'s Turn`;
-      this.uiElements.turnText.setText(text);
-      this.uiElements.turnText.setColor(this.isMyTurn ? '#ff6b6b' : '#666666');
+    // Changed to show energy status instead of turn
+    const myPlayerId = this.roomData?.playerId || this.playerData?.id || 'demo-player';
+    const myPlayer = this.players.get(myPlayerId);
+    
+    if (myPlayer && myPlayer.energy !== undefined) {
+      const energyText = myPlayer.energy > 0 ? 'Roll Available!' : 'No Energy';
+      const energyColor = myPlayer.energy > 0 ? '#4ecdc4' : '#999999';
+      this.uiElements.turnText.setText(energyText);
+      this.uiElements.turnText.setColor(energyColor);
+    } else {
+      this.uiElements.turnText.setText('Ready!');
+      this.uiElements.turnText.setColor('#4ecdc4');
     }
   }
 
@@ -348,22 +319,7 @@ export default class BoardScene extends Phaser.Scene {
     // Game state update
     this.socketManager.on(SOCKET_EVENTS.GAME_STATE_UPDATE, (data) => {
       console.log('Game state update received:', data);
-      
-      // Update current player and turn state
-      if (data.currentPlayer) {
-        this.currentPlayerId = data.currentPlayer;
-        this.isMyTurn = (data.currentPlayer === (this.roomData?.playerId || this.playerData?.id));
-        this.updateTurnIndicator();
-        
-        // Update roll button state
-        if (this.isMyTurn) {
-          this.uiElements.rollButton.setAlpha(1);
-          this.uiElements.rollButton.setInteractive();
-        } else {
-          this.uiElements.rollButton.setAlpha(0.5);
-          this.uiElements.rollButton.disableInteractive();
-        }
-      }
+      // No more turn-based updates needed
     });
     
     // Player joined
@@ -427,28 +383,22 @@ export default class BoardScene extends Phaser.Scene {
       }
     });
     
-    // Next turn
-    this.socketManager.on(SOCKET_EVENTS.NEXT_TURN, (data) => {
-      console.log('Next turn event received:', data);
-      this.handleNextTurn(data);
-    });
+    // Removed NEXT_TURN listener - no longer needed
   }
 
   rollDice() {
     console.log('rollDice() called');
-    console.log('isMyTurn:', this.isMyTurn);
     console.log('dice exists:', !!this.dice);
     console.log('dice.isRolling:', this.dice?.isRolling);
-    console.log('currentPlayerId:', this.currentPlayerId);
-    console.log('playerData?.id:', this.playerData?.id);
+    
+    // Get the current player (the one rolling)
+    const myPlayerId = this.roomData?.playerId || this.playerData?.id || 'demo-player';
+    const currentPlayer = this.players.get(myPlayerId);
+    
+    console.log('My player ID:', myPlayerId);
+    console.log('Current player:', currentPlayer);
     
     // Check conditions
-    if (!this.isMyTurn) {
-      console.log('Not your turn!');
-      this.showNotification('Not your turn!');
-      return;
-    }
-    
     if (!this.dice) {
       console.log('No dice object!');
       this.showNotification('Dice not ready!');
@@ -460,11 +410,17 @@ export default class BoardScene extends Phaser.Scene {
       return;
     }
     
-    const currentPlayer = this.players.get(this.currentPlayerId || this.playerData?.id);
     if (!currentPlayer) {
-      console.log('No current player found!');
+      console.log('Player not found!');
       console.log('Available players:', Array.from(this.players.keys()));
       this.showNotification('Player not found!');
+      return;
+    }
+    
+    // Check energy (client-side check)
+    if (currentPlayer.energy !== undefined && currentPlayer.energy < 1) {
+      console.log('No energy!');
+      this.showNotification('Not enough energy!');
       return;
     }
     
@@ -473,7 +429,7 @@ export default class BoardScene extends Phaser.Scene {
     // Update debug text
     this.uiElements.debugText.setText('Debug: Rolling...');
     
-    // Disable button
+    // Disable button temporarily
     this.uiElements.rollButton.setAlpha(0.5);
     this.uiElements.rollButton.disableInteractive();
     
@@ -487,9 +443,19 @@ export default class BoardScene extends Phaser.Scene {
       const result = Math.floor(Math.random() * 6) + 1;
       console.log('Local roll result:', result);
       
+      // Simulate energy usage
+      if (currentPlayer.energy !== undefined) {
+        currentPlayer.setEnergy(currentPlayer.energy - 1, currentPlayer.maxEnergy || 5);
+        this.updateEnergy({
+          playerId: myPlayerId,
+          currentEnergy: currentPlayer.energy,
+          maxEnergy: currentPlayer.maxEnergy || 5
+        });
+      }
+      
       // Simulate the dice roll event
       this.handleDiceRoll({
-        playerId: currentPlayer.id,
+        playerId: myPlayerId,
         playerName: currentPlayer.name,
         diceResult: { rolls: [result], total: result }
       });
@@ -498,15 +464,10 @@ export default class BoardScene extends Phaser.Scene {
       this.time.delayedCall(1500, () => {
         const newPosition = (currentPlayer.currentSpace + result) % this.board.spaces.length;
         this.handlePlayerMove({
-          playerId: currentPlayer.id,
+          playerId: myPlayerId,
           from: currentPlayer.currentSpace,
           to: newPosition,
           spaces: result
-        });
-        
-        // Simulate turn end after movement
-        this.time.delayedCall(1000, () => {
-          this.showNotification("Turn ended!");
         });
       });
     }
@@ -663,26 +624,6 @@ export default class BoardScene extends Phaser.Scene {
     }
   }
 
-  handleNextTurn(data) {
-    console.log('handleNextTurn called with:', data);
-    this.currentPlayerId = data.currentPlayer;
-    this.isMyTurn = (data.currentPlayer === (this.roomData?.playerId || this.playerData?.id));
-    
-    // Update UI
-    this.updatePlayersList();
-    this.updateTurnIndicator();
-    
-    // Enable/disable roll button
-    if (this.isMyTurn) {
-      this.uiElements.rollButton.setAlpha(1);
-      this.uiElements.rollButton.setInteractive();
-      this.showNotification("It's your turn!");
-    } else {
-      this.uiElements.rollButton.setAlpha(0.5);
-      this.uiElements.rollButton.disableInteractive();
-    }
-  }
-
   showNotification(message) {
     console.log('Notification:', message);
     
@@ -761,6 +702,13 @@ export default class BoardScene extends Phaser.Scene {
   }
 
   updateEnergy(data) {
+    // Update the player's energy
+    const player = this.players.get(data.playerId);
+    if (player) {
+      player.setEnergy(data.currentEnergy, data.maxEnergy);
+    }
+    
+    // If it's the current player, update the UI
     if (data.playerId === (this.roomData?.playerId || this.playerData?.id)) {
       // Update energy bars
       const energy = data.currentEnergy || 0;
@@ -773,6 +721,18 @@ export default class BoardScene extends Phaser.Scene {
           bar.setFillStyle(0x999999);
         }
       });
+      
+      // Update turn indicator to show energy status
+      this.updateTurnIndicator();
+      
+      // Enable/disable roll button based on energy
+      if (energy > 0) {
+        this.uiElements.rollButton.setAlpha(1);
+        this.uiElements.rollButton.setInteractive();
+      } else {
+        this.uiElements.rollButton.setAlpha(0.5);
+        this.uiElements.rollButton.disableInteractive();
+      }
     }
   }
 
